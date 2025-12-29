@@ -1,5 +1,5 @@
 ﻿---
-trigger: audit, activity, logging, critical_action
+trigger: model_decision
 description: Agent trigger: Load this file when implementing side-effects that require audit logging.
 ---
 
@@ -34,4 +34,3 @@ OptAIC requires a strictly auditable trail for all resource mutations and critic
 
 *   **Test**: Verify that your service method calls the emitter.
 *   **Check**: Ensure the `action` string follows the usage pattern `noun.verb`.
-

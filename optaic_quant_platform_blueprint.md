@@ -210,7 +210,122 @@ Channels are resources with:
 
 ---
 
-## 6) Infrastructure enhancements required next
+## 6) Guardrails Framework (Contract-Driven Validation)
+
+OptAIC enforces **guardrails** at all lifecycle gates to ensure configured resources conform to declared contracts before they can be promoted or executed in production.
+
+### 6.1 Core Concepts
+
+| Concept | Description |
+|---------|-------------|
+| **ContractRef** | Identifies a contract kind (e.g., `signal.bounds`, `dataset.schema`) and carries its JSON Schema. |
+| **ContractInstance** | A concrete configuration for a contract kind + a deterministic `contract_hash`. |
+| **ContractBundle** | A set of ContractInstances attached to a resource (the "active bundle"). |
+| **ValidationReport** | The output of every guardrail evaluation—stored and emitted as an activity event. |
+
+### 6.2 Lifecycle Gates
+
+Guardrails are evaluated at these platform gates:
+
+**Resource lifecycle:**
+- `resource.create`
+- `resource.update`
+- `definition.submit` (evaluation admission gate)
+
+**Governance lifecycle:**
+- `promotion.request` (dependency-closure checks)
+- `merge.staging_to_official` (approval gate)
+
+**Execution lifecycle:**
+- `run.submit` (before starting execution)
+- `run.start` (optional runtime checks)
+- `run.complete` (output validation)
+
+### 6.3 Enforcement Policy (Staging vs Official)
+
+| Subspace Kind | Default Policy | Behavior |
+|---------------|----------------|----------|
+| `staging` | **WARN** | Validation issues are logged; operation proceeds. |
+| `official` | **BLOCK** | Validation errors halt the operation. |
+
+This keeps iteration fast in staging while ensuring official is safe and compliant.
+
+Policy can be further refined:
+- Team staging stricter than personal staging
+- Certain actions always block (e.g., merge-to-official)
+- Admin-configurable enforcement by contract kind
+
+### 6.4 ValidationReport Schema
+
+Every evaluation produces a persisted report:
+
+```
+ValidationReport:
+  id: UUID
+  scope: resource | run | promotion | merge
+  target_id: UUID (resource_id / run_id / promotion_id / merge_id)
+  ok: bool
+  enforced_as: warn | block
+  issues: List[ValidationIssue]
+    - code: str (e.g., "BOUNDS_EXCEEDED")
+    - severity: error | warning
+    - message: str
+    - path: str (JSON path to offending field)
+  contract_hashes: List[str]
+  correlation_id: UUID (links to broader workflows)
+  created_at: datetime
+```
+
+### 6.5 Activity Events for Audit
+
+Every guardrails evaluation emits ActivityEvent via the outbox:
+
+- `guardrails.validated` — always emitted
+- `guardrails.blocked` — emitted when blocked by policy
+
+Payload includes:
+- `report_id`
+- `target_id`, `scope`
+- `ok`, `enforced_as`
+- issue counts (errors/warnings)
+- `correlation_id`
+
+Auditor subscriptions are RBAC-driven; no hard-coded superuser access.
+
+### 6.6 Contract Kinds (Examples for Future Implementation)
+
+| Contract Kind | Purpose | Example Config |
+|---------------|---------|----------------|
+| `dataset.schema` | Arrow schema validation | `{"expected_columns": [...]}` |
+| `dataset.freshness` | Schedule + grace period | `{"expected_cadence": "daily", "grace_hours": 6}` |
+| `signal.bounds` | Range + index constraints | `{"min": -1, "max": 1, "allow_nan": false}` |
+| `pit.policy` | No-lookahead constraints | `{"knowledge_date_required": true}` |
+| `portfolio.constraints` | Weights/leverage/turnover | `{"max_weight": 0.1, "max_leverage": 2.0}` |
+| `execution.policy` | Order types, limits, venues | `{"allowed_order_types": ["limit"]}` |
+| `promotion.closure` | Dependency completeness | `{"require_all_refs": true}` |
+
+> **Note:** These are placeholders for future domain logic. The guardrails framework is domain-agnostic; business contracts are added incrementally.
+
+### 6.7 How Guardrails Integrate with Promotion Bundles
+
+Promotion workflows include guardrails at multiple points:
+
+```
+1. User requests promotion (personal → team)
+2. Guardrails evaluate: promotion.closure contract
+   → Check dependency closure completeness
+   → Check mapping requirements (missing upstreams)
+3. If staging: WARN on issues, proceed
+4. Resource lands in team/staging
+5. Delegator reviews and approves merge to official
+6. Guardrails evaluate at merge gate: all attached contracts
+   → If official: BLOCK on errors
+7. If passed: Resource is now in team/official
+```
+
+---
+
+## 7) Infrastructure enhancements required next
 
 Before implementing full domain logic, enhance infrastructure to support:
 
@@ -223,7 +338,7 @@ Before implementing full domain logic, enhance infrastructure to support:
 
 ---
 
-## 7) Recommended Python-native tech stack (Windows-friendly, integratable into `optaic server`)
+## 8) Recommended Python-native tech stack (Windows-friendly, integratable into `optaic server`)
 
 This is designed for two modes:
 
@@ -323,9 +438,9 @@ Security note for pip:
 
 ---
 
-## 8) How it all fits into `optaic server`
+## 9) How it all fits into `optaic server`
 
-### 8.1 Suggested `optaic server` flags (embedded default)
+### 9.1 Suggested `optaic server` flags (embedded default)
 
 - `optaic server`
   - API + worker + agent + Centrifugo
@@ -338,7 +453,7 @@ Security note for pip:
 
 All of these are managed in the same supervisor, tracked in installed.json, and upgraded via the same upgrade engine.
 
-### 8.2 Adapter-driven integration (keeps business logic clean)
+### 9.2 Adapter-driven integration (keeps business logic clean)
 
 Define internal interfaces:
 - `OrchestratorAdapter` (submit flow / schedule / query state)
@@ -355,7 +470,7 @@ This gives you “swapability” without rewriting domain logic.
 
 ---
 
-## 9) Next steps (recommended implementation order)
+## 10) Next steps (recommended implementation order)
 
 1) Implement orchestrator abstraction + minimal LocalOrchestrator DAG executor.
 2) Integrate Prefect as optional (`--with-prefect`) and map:
@@ -370,6 +485,213 @@ This gives you “swapability” without rewriting domain logic.
 
 ---
 
-## 10) Notes about “memorization”
+## 11) Two-Tier Resource Model: Definitions vs Instances
+
+### 11.1 Core Concept
+
+OptAIC separates **what** (definitions) from **how** (instances):
+
+```
+Definition (Plugin)         Instance (Config)              Run (Execution)
+─────────────────          ──────────────────             ────────────────
+BloombergPipelineDef   →   SPX_OHLCV_Dataset          →   Daily refresh run
+  (code + interface)         (config + refs)               (execution + version)
+```
+
+### 11.2 Definitions are Plugins
+
+Definitions are **reusable building blocks** submitted as plugins:
+
+| Definition Type | What It Defines | Examples |
+|----------------|-----------------|----------|
+| `PipelineDef` | Data ingestion/transformation logic | `BloombergPipeline`, `FredPipeline`, `ExpressionPipeline` |
+| `StoreDef` | Data persistence strategy | `ParquetStore`, `VirtualCacheStore` |
+| `AccessorDef` | Data retrieval interface | `PITAccessor`, `FieldAccessor`, `SnapshotAccessor` |
+| `OpDef` | Primitive operation | `MA`, `Zscore`, `Lag` |
+| `OpMacroDef` | Saved DSL expression | `MACrossover`, `MomentumScore` |
+| `MLModuleDef` | ML model wrapper | `XGBTrainer`, `LSTMPredictor` |
+
+**Definition Development Flow:**
+```
+1. Developer writes code implementing abstract interface
+2. Developer submits via SDK to personal/staging
+3. EvaluationRun executes: pytest, ruff, interface checks
+4. If passed → available for promotion
+5. Promote to team/system → merge to official after approval
+6. Definition is now a registered plugin
+```
+
+### 11.3 Instances are Configurations
+
+Instances are **concrete usages** of definitions with specific config:
+
+```python
+# Example: SPX OHLCV Dataset Instance
+DatasetInstance(
+    name="SPX_OHLCV_Daily",
+    pipeline=PipelineInstanceRef(
+        def_id="bloomberg-pipeline-def",
+        def_version="1.2.0",
+        config={"ticker": "SPX Index", "fields": ["PX_OPEN", "PX_HIGH", "PX_LOW", "PX_LAST", "VOLUME"]}
+    ),
+    store=StoreInstanceRef(
+        def_id="parquet-store-def",
+        config={"partition_by": "year", "compression": "snappy"}
+    ),
+    accessor=AccessorInstanceRef(
+        def_id="pit-accessor-def",
+        config={"knowledge_date_col": "knowledge_date"}
+    ),
+    schedule={"cron": "0 18 * * 1-5", "timezone": "America/New_York"}
+)
+```
+
+**Instance Creation Flow:**
+```
+1. User selects approved definitions from registry
+2. User configures instance via SDK or WebUI
+3. Guardrails validate config against definition contracts
+4. Submit to personal/staging
+5. Promote to team/system for shared use
+6. Instance is orchestrated for execution
+```
+
+### 11.4 Composable Datasets
+
+Datasets can compose other datasets:
+
+```
+External Data                    Derived Signals                   Portfolio
+────────────                    ───────────────                   ─────────
+BloombergPipeline               ExpressionPipeline                PortfolioConstructor
+    │                               │                                  │
+    ▼                               ▼                                  ▼
+SPX_OHLCV_Dataset    ──────►   SPX_MA_Signal_Dataset  ──────►   SPX_Momentum_Portfolio
+    │                               │                                  │
+ParquetStore                    VirtualCacheStore                 ParquetStore
+PITAccessor                     FieldAccessor                     PITAccessor
+```
+
+**DAG Execution:**
+- Upstream datasets refresh first
+- Downstream datasets compute after upstreams complete
+- PIT accessors ensure no lookahead bias at any step
+
+---
+
+## 12) SDK Usage Patterns
+
+### 12.1 For Definition Developers (Platform Engineers)
+
+```python
+from optaic import SDK
+
+sdk = SDK()
+
+# Submit new pipeline definition
+submission = await sdk.definitions.submit(
+    kind="pipeline",
+    name="fred-pipeline",
+    code_path="./fred_pipeline/",
+    tests_path="./tests/",
+    interface="OptAIC.PipelineInterface.v1"
+)
+
+# Check evaluation status
+result = await sdk.definitions.get_evaluation(submission.id)
+print(result.status, result.issues)
+
+# Promote to team
+await sdk.promotions.request(
+    resource_id=submission.resource_id,
+    target_space="team:quant-research"
+)
+```
+
+### 12.2 For Instance Creators (Quant/Data Users)
+
+```python
+from optaic import SDK
+
+sdk = SDK()
+
+# List available pipeline definitions
+pipelines = await sdk.registry.list_definitions(kind="pipeline")
+
+# Create dataset instance using definitions
+dataset = await sdk.instances.create_dataset(
+    name="FRED_GDP_Vintage",
+    pipeline_def="fred-pipeline",
+    pipeline_config={"series_id": "GDP", "vintage_dates": True},
+    store_def="parquet-store",
+    store_config={"partition_by": "vintage_date"},
+    accessor_def="pit-accessor",
+    schedule={"cron": "0 9 * * 1"}
+)
+
+# Submit for orchestration
+await sdk.instances.submit(dataset.id)
+
+# Query data via accessor
+data = await sdk.data.query(
+    dataset_id=dataset.id,
+    as_of_date="2024-01-15",
+    knowledge_date="2024-01-15"  # PIT query
+)
+```
+
+### 12.3 For Experiment Workflows
+
+```python
+# Quick expression experiment (not persisted)
+result = await sdk.experiments.run_expression(
+    expression="zscore(lag(close, 20) / close - 1)",
+    input_datasets=["SPX_OHLCV_Daily"],
+    date_range=("2020-01-01", "2024-01-01")
+)
+
+# Persist as OpMacro definition if good
+if result.sharpe > 1.0:
+    await sdk.definitions.submit(
+        kind="op_macro",
+        name="momentum-zscore",
+        expression=result.expression,
+        tests="auto"  # Generate tests from experiment
+    )
+```
+
+---
+
+## 13) Platform Development vs User Development
+
+### 13.1 Platform Team Responsibilities
+
+Build the **skeleton** with:
+- Abstract interfaces for each definition type
+- Base implementations as reference
+- Minimal "out of box" definitions in system/official
+- Guardrails contracts for validation
+- SDK and WebUI for submission/configuration
+
+### 13.2 Quant/Data Team Responsibilities
+
+Extend the platform with:
+- New definition plugins (BloombergPipeline, custom expressions)
+- Configured instances (specific datasets, signals)
+- Experiment workflows
+- Analysis and reporting
+
+### 13.3 Governance Throughout
+
+Both follow the same governance:
+```
+personal/staging → personal/official → team/staging → team/official → system/staging → system/official
+```
+
+All actions emit activities. All promotions require approval.
+
+---
+
+## 14) Notes about "memorization"
 
 This file is intended to be uploaded later to restore full context of the system design and governance model.

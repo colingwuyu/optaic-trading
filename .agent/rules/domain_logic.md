@@ -53,3 +53,53 @@ optaic-trading/
     api/              <-- API Endpoints (FastAPI)
     worker/           <-- Background Tasks
 ```
+## 6. Two-Tier Resource Model (Quant Domain)
+
+OptAIC separates **Definitions** (plugins) from **Instances** (configs):
+
+```
+Definition (Plugin)         Instance (Config)              Run (Execution)
+─────────────────          ──────────────────             ────────────────
+BloombergPipelineDef   →   SPX_OHLCV_Dataset          →   Daily refresh run
+  (code + interface)         (config + refs)               (execution + version)
+```
+
+- **Definitions**: Reusable building blocks submitted as plugins
+- **Instances**: Concrete configurations referencing definitions
+- **Runs**: Executions that produce immutable versions
+
+## 7. Activity Emission
+
+**Core rule**: If it changes state, it MUST emit an activity.
+
+All mutations emit activities in the **service layer** (not API handlers):
+
+```python
+await record_activity_with_outbox(
+    session=self.session,
+    envelope=ActivityEnvelope(
+        action="signal.created",
+        actor_principal_id=self.actor_id,
+        resource_id=resource.id,
+        resource_type="signal",
+        payload={"signal_type": dto.signal_type}
+    )
+)
+```
+
+## 8. Guardrails Hooks
+
+Validate at lifecycle gates:
+- `resource.create` / `resource.update`
+- `promotion.request` / `promotion.merge`
+- `run.submit` / `run.start`
+
+## 9. Version Tracking
+
+Instances must reference definition versions for reproducibility:
+
+```python
+class DatasetInstance:
+    pipeline_def_id: UUID
+    pipeline_def_version: int  # Pinned version
+```
