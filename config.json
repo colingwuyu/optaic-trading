@@ -1,0 +1,717 @@
+{
+  "http_server": {
+    "address": "",
+    "port": 8000,
+    "internal_address": "",
+    "internal_port": "",
+    "tls": {
+      "enabled": false,
+      "cert_pem": "",
+      "key_pem": "",
+      "server_ca_pem": "",
+      "client_ca_pem": "",
+      "insecure_skip_verify": false,
+      "server_name": ""
+    },
+    "tls_autocert": {
+      "enabled": false,
+      "host_whitelist": null,
+      "cache_dir": "",
+      "email": "",
+      "server_name": "",
+      "http": false,
+      "http_addr": ":80"
+    },
+    "tls_external": false,
+    "internal_tls": {
+      "enabled": false,
+      "cert_pem": "",
+      "key_pem": "",
+      "server_ca_pem": "",
+      "client_ca_pem": "",
+      "insecure_skip_verify": false,
+      "server_name": ""
+    },
+    "http3": {
+      "enabled": false
+    }
+  },
+  "log": {
+    "level": "info",
+    "file": ""
+  },
+  "engine": {
+    "type": "memory",
+    "redis": {
+      "address": [
+        "redis://127.0.0.1:6379"
+      ],
+      "prefix": "centrifugo",
+      "connect_timeout": "1s",
+      "io_timeout": "4s",
+      "db": 0,
+      "user": "",
+      "password": "",
+      "client_name": "",
+      "force_resp2": false,
+      "cluster_address": null,
+      "tls": {
+        "enabled": false,
+        "cert_pem": "",
+        "key_pem": "",
+        "server_ca_pem": "",
+        "client_ca_pem": "",
+        "insecure_skip_verify": false,
+        "server_name": ""
+      },
+      "sentinel_address": null,
+      "sentinel_user": "",
+      "sentinel_password": "",
+      "sentinel_master_name": "",
+      "sentinel_client_name": "",
+      "sentinel_tls": {
+        "enabled": false,
+        "cert_pem": "",
+        "key_pem": "",
+        "server_ca_pem": "",
+        "client_ca_pem": "",
+        "insecure_skip_verify": false,
+        "server_name": ""
+      },
+      "history_use_lists": false,
+      "presence_ttl": "1m0s",
+      "presence_hash_field_ttl": false,
+      "presence_user_mapping": false
+    }
+  },
+  "broker": {
+    "enabled": false,
+    "type": "memory",
+    "redis": {
+      "address": [
+        "redis://127.0.0.1:6379"
+      ],
+      "prefix": "centrifugo",
+      "connect_timeout": "1s",
+      "io_timeout": "4s",
+      "db": 0,
+      "user": "",
+      "password": "",
+      "client_name": "",
+      "force_resp2": false,
+      "cluster_address": null,
+      "tls": {
+        "enabled": false,
+        "cert_pem": "",
+        "key_pem": "",
+        "server_ca_pem": "",
+        "client_ca_pem": "",
+        "insecure_skip_verify": false,
+        "server_name": ""
+      },
+      "sentinel_address": null,
+      "sentinel_user": "",
+      "sentinel_password": "",
+      "sentinel_master_name": "",
+      "sentinel_client_name": "",
+      "sentinel_tls": {
+        "enabled": false,
+        "cert_pem": "",
+        "key_pem": "",
+        "server_ca_pem": "",
+        "client_ca_pem": "",
+        "insecure_skip_verify": false,
+        "server_name": ""
+      },
+      "history_use_lists": false
+    },
+    "nats": {
+      "url": "nats://localhost:4222",
+      "prefix": "centrifugo",
+      "dial_timeout": "1s",
+      "write_timeout": "1s",
+      "tls": {
+        "enabled": false,
+        "cert_pem": "",
+        "key_pem": "",
+        "server_ca_pem": "",
+        "client_ca_pem": "",
+        "insecure_skip_verify": false,
+        "server_name": ""
+      },
+      "allow_wildcards": false,
+      "raw_mode": {
+        "enabled": false,
+        "channel_replacements": {},
+        "prefix": ""
+      }
+    }
+  },
+  "presence_manager": {
+    "enabled": false,
+    "type": "memory",
+    "redis": {
+      "address": [
+        "redis://127.0.0.1:6379"
+      ],
+      "prefix": "centrifugo",
+      "connect_timeout": "1s",
+      "io_timeout": "4s",
+      "db": 0,
+      "user": "",
+      "password": "",
+      "client_name": "",
+      "force_resp2": false,
+      "cluster_address": null,
+      "tls": {
+        "enabled": false,
+        "cert_pem": "",
+        "key_pem": "",
+        "server_ca_pem": "",
+        "client_ca_pem": "",
+        "insecure_skip_verify": false,
+        "server_name": ""
+      },
+      "sentinel_address": null,
+      "sentinel_user": "",
+      "sentinel_password": "",
+      "sentinel_master_name": "",
+      "sentinel_client_name": "",
+      "sentinel_tls": {
+        "enabled": false,
+        "cert_pem": "",
+        "key_pem": "",
+        "server_ca_pem": "",
+        "client_ca_pem": "",
+        "insecure_skip_verify": false,
+        "server_name": ""
+      },
+      "presence_ttl": "1m0s",
+      "presence_hash_field_ttl": false,
+      "presence_user_mapping": false
+    }
+  },
+  "client": {
+    "proxy": {
+      "connect": {
+        "enabled": false,
+        "endpoint": "",
+        "timeout": "1s",
+        "http_headers": null,
+        "grpc_metadata": null,
+        "binary_encoding": false,
+        "include_connection_meta": false,
+        "http": {
+          "tls": {
+            "enabled": false,
+            "cert_pem": "",
+            "key_pem": "",
+            "server_ca_pem": "",
+            "client_ca_pem": "",
+            "insecure_skip_verify": false,
+            "server_name": ""
+          },
+          "static_headers": {},
+          "status_to_code_transforms": []
+        },
+        "grpc": {
+          "tls": {
+            "enabled": false,
+            "cert_pem": "",
+            "key_pem": "",
+            "server_ca_pem": "",
+            "client_ca_pem": "",
+            "insecure_skip_verify": false,
+            "server_name": ""
+          },
+          "credentials_key": "",
+          "credentials_value": "",
+          "compression": false
+        }
+      },
+      "refresh": {
+        "enabled": false,
+        "endpoint": "",
+        "timeout": "1s",
+        "http_headers": null,
+        "grpc_metadata": null,
+        "binary_encoding": false,
+        "include_connection_meta": false,
+        "http": {
+          "tls": {
+            "enabled": false,
+            "cert_pem": "",
+            "key_pem": "",
+            "server_ca_pem": "",
+            "client_ca_pem": "",
+            "insecure_skip_verify": false,
+            "server_name": ""
+          },
+          "static_headers": {},
+          "status_to_code_transforms": []
+        },
+        "grpc": {
+          "tls": {
+            "enabled": false,
+            "cert_pem": "",
+            "key_pem": "",
+            "server_ca_pem": "",
+            "client_ca_pem": "",
+            "insecure_skip_verify": false,
+            "server_name": ""
+          },
+          "credentials_key": "",
+          "credentials_value": "",
+          "compression": false
+        }
+      }
+    },
+    "allowed_origins": null,
+    "token": {
+      "hmac_secret_key": "",
+      "rsa_public_key": "",
+      "ecdsa_public_key": "",
+      "jwks_public_endpoint": "",
+      "audience": "",
+      "audience_regex": "",
+      "issuer": "",
+      "issuer_regex": "",
+      "user_id_claim": ""
+    },
+    "subscription_token": {
+      "enabled": false,
+      "hmac_secret_key": "",
+      "rsa_public_key": "",
+      "ecdsa_public_key": "",
+      "jwks_public_endpoint": "",
+      "audience": "",
+      "audience_regex": "",
+      "issuer": "",
+      "issuer_regex": "",
+      "user_id_claim": ""
+    },
+    "allow_anonymous_connect_without_token": false,
+    "disallow_anonymous_connection_tokens": false,
+    "ping_interval": "25s",
+    "pong_timeout": "8s",
+    "expired_close_delay": "25s",
+    "expired_sub_close_delay": "25s",
+    "stale_close_delay": "10s",
+    "channel_limit": 128,
+    "queue_max_size": 1048576,
+    "presence_update_interval": "27s",
+    "concurrency": 0,
+    "channel_position_check_delay": "40s",
+    "channel_position_max_time_lag": "0s",
+    "connection_limit": 0,
+    "user_connection_limit": 0,
+    "connection_rate_limit": 0,
+    "connect_include_server_time": false,
+    "history_max_publication_limit": 300,
+    "recovery_max_publication_limit": 300,
+    "insecure_skip_token_signature_verify": false,
+    "user_id_http_header": "",
+    "insecure": false,
+    "subscribe_to_user_personal_channel": {
+      "enabled": false,
+      "personal_channel_namespace": "",
+      "single_connection": false
+    },
+    "connect_code_to_unidirectional_disconnect": {
+      "enabled": false,
+      "transforms": []
+    }
+  },
+  "channel": {
+    "proxy": {
+      "subscribe": {
+        "endpoint": "",
+        "timeout": "1s",
+        "http_headers": null,
+        "grpc_metadata": null,
+        "binary_encoding": false,
+        "include_connection_meta": false,
+        "http": {
+          "tls": {
+            "enabled": false,
+            "cert_pem": "",
+            "key_pem": "",
+            "server_ca_pem": "",
+            "client_ca_pem": "",
+            "insecure_skip_verify": false,
+            "server_name": ""
+          },
+          "static_headers": {},
+          "status_to_code_transforms": []
+        },
+        "grpc": {
+          "tls": {
+            "enabled": false,
+            "cert_pem": "",
+            "key_pem": "",
+            "server_ca_pem": "",
+            "client_ca_pem": "",
+            "insecure_skip_verify": false,
+            "server_name": ""
+          },
+          "credentials_key": "",
+          "credentials_value": "",
+          "compression": false
+        }
+      },
+      "publish": {
+        "endpoint": "",
+        "timeout": "1s",
+        "http_headers": null,
+        "grpc_metadata": null,
+        "binary_encoding": false,
+        "include_connection_meta": false,
+        "http": {
+          "tls": {
+            "enabled": false,
+            "cert_pem": "",
+            "key_pem": "",
+            "server_ca_pem": "",
+            "client_ca_pem": "",
+            "insecure_skip_verify": false,
+            "server_name": ""
+          },
+          "static_headers": {},
+          "status_to_code_transforms": []
+        },
+        "grpc": {
+          "tls": {
+            "enabled": false,
+            "cert_pem": "",
+            "key_pem": "",
+            "server_ca_pem": "",
+            "client_ca_pem": "",
+            "insecure_skip_verify": false,
+            "server_name": ""
+          },
+          "credentials_key": "",
+          "credentials_value": "",
+          "compression": false
+        }
+      },
+      "sub_refresh": {
+        "endpoint": "",
+        "timeout": "1s",
+        "http_headers": null,
+        "grpc_metadata": null,
+        "binary_encoding": false,
+        "include_connection_meta": false,
+        "http": {
+          "tls": {
+            "enabled": false,
+            "cert_pem": "",
+            "key_pem": "",
+            "server_ca_pem": "",
+            "client_ca_pem": "",
+            "insecure_skip_verify": false,
+            "server_name": ""
+          },
+          "static_headers": {},
+          "status_to_code_transforms": []
+        },
+        "grpc": {
+          "tls": {
+            "enabled": false,
+            "cert_pem": "",
+            "key_pem": "",
+            "server_ca_pem": "",
+            "client_ca_pem": "",
+            "insecure_skip_verify": false,
+            "server_name": ""
+          },
+          "credentials_key": "",
+          "credentials_value": "",
+          "compression": false
+        }
+      },
+      "subscribe_stream": {
+        "endpoint": "",
+        "timeout": "1s",
+        "http_headers": null,
+        "grpc_metadata": null,
+        "binary_encoding": false,
+        "include_connection_meta": false,
+        "http": {
+          "tls": {
+            "enabled": false,
+            "cert_pem": "",
+            "key_pem": "",
+            "server_ca_pem": "",
+            "client_ca_pem": "",
+            "insecure_skip_verify": false,
+            "server_name": ""
+          },
+          "static_headers": {},
+          "status_to_code_transforms": []
+        },
+        "grpc": {
+          "tls": {
+            "enabled": false,
+            "cert_pem": "",
+            "key_pem": "",
+            "server_ca_pem": "",
+            "client_ca_pem": "",
+            "insecure_skip_verify": false,
+            "server_name": ""
+          },
+          "credentials_key": "",
+          "credentials_value": "",
+          "compression": false
+        }
+      }
+    },
+    "without_namespace": {
+      "presence": false,
+      "join_leave": false,
+      "force_push_join_leave": false,
+      "history_size": 0,
+      "history_ttl": "0s",
+      "history_meta_ttl": "0s",
+      "force_positioning": false,
+      "allow_positioning": false,
+      "force_recovery": false,
+      "allow_recovery": false,
+      "force_recovery_mode": "",
+      "allowed_delta_types": null,
+      "delta_publish": false,
+      "allow_subscribe_for_anonymous": false,
+      "allow_subscribe_for_client": false,
+      "allow_publish_for_anonymous": false,
+      "allow_publish_for_subscriber": false,
+      "allow_publish_for_client": false,
+      "allow_presence_for_anonymous": false,
+      "allow_presence_for_subscriber": false,
+      "allow_presence_for_client": false,
+      "allow_history_for_anonymous": false,
+      "allow_history_for_subscriber": false,
+      "allow_history_for_client": false,
+      "allow_user_limited_channels": false,
+      "channel_regex": "",
+      "subscribe_proxy_enabled": false,
+      "subscribe_proxy_name": "default",
+      "publish_proxy_enabled": false,
+      "publish_proxy_name": "default",
+      "sub_refresh_proxy_enabled": false,
+      "sub_refresh_proxy_name": "default",
+      "subscribe_stream_proxy_enabled": false,
+      "subscribe_stream_proxy_name": "default",
+      "subscribe_stream_proxy_bidirectional": false
+    },
+    "namespaces": [],
+    "history_meta_ttl": "720h0m0s",
+    "max_length": 255,
+    "private_prefix": "$",
+    "namespace_boundary": ":",
+    "user_boundary": "#",
+    "user_separator": ","
+  },
+  "rpc": {
+    "proxy": {
+      "endpoint": "",
+      "timeout": "1s",
+      "http_headers": null,
+      "grpc_metadata": null,
+      "binary_encoding": false,
+      "include_connection_meta": false,
+      "http": {
+        "tls": {
+          "enabled": false,
+          "cert_pem": "",
+          "key_pem": "",
+          "server_ca_pem": "",
+          "client_ca_pem": "",
+          "insecure_skip_verify": false,
+          "server_name": ""
+        },
+        "static_headers": {},
+        "status_to_code_transforms": []
+      },
+      "grpc": {
+        "tls": {
+          "enabled": false,
+          "cert_pem": "",
+          "key_pem": "",
+          "server_ca_pem": "",
+          "client_ca_pem": "",
+          "insecure_skip_verify": false,
+          "server_name": ""
+        },
+        "credentials_key": "",
+        "credentials_value": "",
+        "compression": false
+      }
+    },
+    "without_namespace": {
+      "proxy_enabled": false,
+      "proxy_name": "default"
+    },
+    "namespaces": [],
+    "ping": {
+      "enabled": false,
+      "method": "ping"
+    },
+    "namespace_boundary": ":"
+  },
+  "proxies": [],
+  "http_api": {
+    "disabled": false,
+    "handler_prefix": "/api",
+    "key": "",
+    "error_mode": "",
+    "external": false,
+    "insecure": false
+  },
+  "grpc_api": {
+    "enabled": false,
+    "error_mode": "",
+    "address": "",
+    "port": 10000,
+    "key": "",
+    "tls": {
+      "enabled": false,
+      "cert_pem": "",
+      "key_pem": "",
+      "server_ca_pem": "",
+      "client_ca_pem": "",
+      "insecure_skip_verify": false,
+      "server_name": ""
+    },
+    "reflection": false,
+    "max_receive_message_size": 0
+  },
+  "consumers": [],
+  "websocket": {
+    "disabled": false,
+    "handler_prefix": "/connection/websocket",
+    "compression": false,
+    "compression_min_size": 0,
+    "compression_level": 1,
+    "read_buffer_size": 0,
+    "use_write_buffer_pool": false,
+    "write_buffer_size": 0,
+    "write_timeout": "1s",
+    "message_size_limit": 65536
+  },
+  "sse": {
+    "enabled": false,
+    "handler_prefix": "/connection/sse",
+    "max_request_body_size": 65536
+  },
+  "http_stream": {
+    "enabled": false,
+    "handler_prefix": "/connection/http_stream",
+    "max_request_body_size": 65536
+  },
+  "webtransport": {
+    "enabled": false,
+    "handler_prefix": "/connection/webtransport",
+    "message_size_limit": 65536
+  },
+  "uni_sse": {
+    "enabled": false,
+    "handler_prefix": "/connection/uni_sse",
+    "max_request_body_size": 65536,
+    "connect_code_to_http_response": {
+      "enabled": false,
+      "transforms": []
+    }
+  },
+  "uni_http_stream": {
+    "enabled": false,
+    "handler_prefix": "/connection/uni_http_stream",
+    "max_request_body_size": 65536,
+    "connect_code_to_http_response": {
+      "enabled": false,
+      "transforms": []
+    }
+  },
+  "uni_websocket": {
+    "enabled": false,
+    "handler_prefix": "/connection/uni_websocket",
+    "compression": false,
+    "compression_min_size": 0,
+    "compression_level": 1,
+    "read_buffer_size": 0,
+    "use_write_buffer_pool": false,
+    "write_buffer_size": 0,
+    "write_timeout": "1s",
+    "message_size_limit": 65536,
+    "join_push_messages": false
+  },
+  "uni_grpc": {
+    "enabled": false,
+    "address": "",
+    "port": 11000,
+    "max_receive_message_size": 0,
+    "tls": {
+      "enabled": false,
+      "cert_pem": "",
+      "key_pem": "",
+      "server_ca_pem": "",
+      "client_ca_pem": "",
+      "insecure_skip_verify": false,
+      "server_name": ""
+    }
+  },
+  "emulation": {
+    "handler_prefix": "/emulation",
+    "max_request_body_size": 65536
+  },
+  "admin": {
+    "enabled": false,
+    "handler_prefix": "",
+    "password": "",
+    "secret": "",
+    "insecure": false,
+    "web_path": "",
+    "web_proxy_address": "",
+    "external": false
+  },
+  "prometheus": {
+    "enabled": false,
+    "handler_prefix": "/metrics",
+    "instrument_http_handlers": false
+  },
+  "health": {
+    "enabled": false,
+    "handler_prefix": "/health"
+  },
+  "swagger": {
+    "enabled": false,
+    "handler_prefix": "/swagger"
+  },
+  "debug": {
+    "enabled": false,
+    "handler_prefix": "/debug/pprof"
+  },
+  "opentelemetry": {
+    "enabled": false,
+    "api": false,
+    "consuming": false
+  },
+  "graphite": {
+    "enabled": false,
+    "host": "localhost",
+    "port": 2003,
+    "prefix": "centrifugo",
+    "interval": "10s",
+    "tags": false
+  },
+  "usage_stats": {
+    "disabled": false
+  },
+  "node": {
+    "name": "",
+    "info_metrics_aggregate_interval": "1m0s"
+  },
+  "shutdown": {
+    "timeout": "30s"
+  },
+  "pid_file": "",
+  "enable_unreleased_features": false
+}

@@ -1,0 +1,15 @@
+[project]
+name = "agent"
+version = "0.1.0"
+description = "Agent service"
+requires-python = ">=3.11"
+dependencies = [
+    "libs-core",
+    "libs-db",
+    "libs-sdk-py",
+]
+
+[tool.uv.sources]
+libs-core = { workspace = true }
+libs-db = { workspace = true }
+libs-sdk-py = { workspace = true }

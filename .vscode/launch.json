@@ -1,0 +1,73 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "API: debug",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "apps.api.main:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8081",
+        "--reload",
+        "--reload-dir",
+        "apps/api",
+        "--reload-dir",
+        "libs"
+      ],
+      "envFile": "${workspaceFolder}\\.vscode\\.env",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      },
+      "subProcess": true,
+      "justMyCode": false,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Worker: debug",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "apps.worker.main",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}\\.vscode\\.env",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      },
+      "justMyCode": false,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Agent: debug",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "apps.agent.main",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}\\.vscode\\.env",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      },
+      "justMyCode": false,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "OptAIC server: debug",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "optaic.cli",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "server"
+      ],
+      "envFile": "${workspaceFolder}\\.vscode\\.env",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      },
+      "justMyCode": false,
+      "console": "integratedTerminal"
+    }
+  ]
+}

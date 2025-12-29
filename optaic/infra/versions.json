@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "tools": {
+    "centrifugo": {
+      "default_version": "6.1.0",
+      "assets": {
+        "windows_amd64": {
+          "url": "https://github.com/centrifugal/centrifugo/releases/download/v6.1.0/centrifugo_6.1.0_windows_amd64.zip",
+          "sha256": "4a07e9f9e1e528267d69aa4d26ff950626f3ac4832d3562d81648434969d198b"
+        },
+        "linux_amd64": {
+          "url": "https://github.com/centrifugal/centrifugo/releases/download/v6.1.0/centrifugo_6.1.0_linux_amd64.tar.gz",
+          "sha256": "5d0b139629f6e0065cc05808d5e507576da9f6692f24829971c93698bbd19f92"
+        },
+        "linux_arm64": {
+          "url": "https://github.com/centrifugal/centrifugo/releases/download/v6.1.0/centrifugo_6.1.0_linux_arm64.tar.gz",
+          "sha256": "3a18bec554a9877255081cb84d29e269e450a8c9b62577aa0cb4261d04f69e18"
+        },
+        "darwin_amd64": {
+          "url": "https://github.com/centrifugal/centrifugo/releases/download/v6.1.0/centrifugo_6.1.0_darwin_amd64.tar.gz",
+          "sha256": "67155a1da42bec4b36df164f3ffc7e5609dda2a2705f6959518f46819d0e2116"
+        },
+        "darwin_arm64": {
+          "url": "https://github.com/centrifugal/centrifugo/releases/download/v6.1.0/centrifugo_6.1.0_darwin_arm64.tar.gz",
+          "sha256": "27da52f8305eb13df99c876db734c55099ffb23836927845e05f6f832ea350cc"
+        }
+      }
+    },
+    "redis_windows": {
+      "default_version": "8.4.0",
+      "assets": {
+        "windows_amd64_msys2": {
+          "url": "https://github.com/redis-windows/redis-windows/releases/download/8.4.0/Redis-8.4.0-Windows-x64-msys2.zip",
+          "sha256": "8a751b5cc12deed06457d35f8e7b9e4bbfa00145ee8474a19fcd480a2fd98cd5"
+        },
+        "windows_amd64_cygwin": {
+          "url": "https://github.com/redis-windows/redis-windows/releases/download/8.4.0/Redis-8.4.0-Windows-x64-cygwin.zip",
+          "sha256": "63a192de32055fa2c32a957a75ac9442276db87cf4890fec2c345f87109fc6b8"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-fog-50 font-sans text-ink-900;
+  background-image: radial-gradient(
+      circle at top left,
+      rgba(22, 163, 74, 0.08),
+      transparent 45%
+    ),
+    radial-gradient(circle at 30% 20%, rgba(59, 130, 246, 0.08), transparent 40%),
+    linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+}
+
+* {
+  @apply antialiased;
+}
+
+.glass-card {
+  @apply rounded-2xl border border-fog-200 bg-white/80 shadow-soft backdrop-blur;
+}
+
+.nav-pill {
+  @apply inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-ink-800 shadow-sm;
+}
+
+.chat-panel .cs-chat-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.chat-panel .cs-message-list {
+  flex: 1 1 auto;
+  height: auto;
+}

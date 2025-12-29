@@ -1,0 +1,11 @@
+[project]
+name = "libs-core"
+version = "0.1.0"
+description = "Core domain models"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.6.1",
+    "pydantic-settings>=2.1.0",
+    "structlog>=24.0.0",
+    "pycasbin>=1.36.0",
+]

@@ -1,0 +1,28 @@
+{
+  "engine": {
+    "type": "redis",
+    "redis": {
+      "address": "redis://redis:6379/0"
+    }
+  },
+  "client": {
+    "token": {
+      "hmac_secret_key": "dev-secret-change-me"
+    }
+  },
+  "http_api": {
+    "key": "dev-api-key"
+  },
+  "admin": {
+    "enabled": false
+  },
+  "health": {
+    "enabled": true
+  },
+  "channel": {
+    "namespace_boundary": "|",
+    "without_namespace": {
+      "allow_subscribe_for_client": true
+    }
+  }
+}

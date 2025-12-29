@@ -1,0 +1,13 @@
+[project]
+name = "api"
+version = "0.1.0"
+description = "FastAPI service"
+requires-python = ">=3.11"
+dependencies = [
+    "libs-core",
+    "libs-db",
+]
+
+[tool.uv.sources]
+libs-core = { workspace = true }
+libs-db = { workspace = true }

@@ -1,0 +1,122 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev: lint",
+      "type": "shell",
+      "command": "${command:python.interpreterPath}",
+      "args": ["-m", "ruff", "check", "."],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "dev: test",
+      "type": "shell",
+      "command": "${command:python.interpreterPath}",
+      "args": ["-m", "pytest"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "dev: build",
+      "type": "shell",
+      "command": "${command:python.interpreterPath}",
+      "args": ["-m", "build"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "dev: publish staging",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\scripts\\devops\\publish.ps1",
+        "-Lane",
+        "staging",
+        "-RepoBaseUrl",
+        "${input:artifactoryStagingUrl}"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "dev: promote staging->uat",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\scripts\\devops\\promote.ps1",
+        "-FromLane",
+        "staging",
+        "-ToLane",
+        "uat",
+        "-Version",
+        "${input:promotionVersion}"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "dev: promote uat->prod",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\scripts\\devops\\promote.ps1",
+        "-FromLane",
+        "uat",
+        "-ToLane",
+        "prod",
+        "-Version",
+        "${input:promotionVersion}"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "setup: dev-deps",
+      "type": "shell",
+      "command": "make",
+      "args": ["dev-deps"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "artifactoryStagingUrl",
+      "type": "promptString",
+      "description": "Artifactory staging base URL (no /simple)",
+      "default": "http://localhost:8081"
+    },
+    {
+      "id": "promotionVersion",
+      "type": "promptString",
+      "description": "Version to promote (e.g. 0.3.7)"
+    }
+  ]
+}

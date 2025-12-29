@@ -1,0 +1,5 @@
+recursive-include optaic/webui_dist *
+include optaic/webui_dist/.buildinfo.json
+include optaic/infra/versions.json
+include libs/db/alembic.ini
+recursive-include libs/db/migrations *

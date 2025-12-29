@@ -1,0 +1,8 @@
+[project]
+name = "libs-sdk-py"
+version = "0.1.0"
+description = "Thin Python SDK client"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.26.0",
+]

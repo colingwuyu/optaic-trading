@@ -1,0 +1,433 @@
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Literal
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from libs.core.events import ActivityEventV1
+
+class HealthCheck(BaseModel):
+    ok: bool = True
+
+class TenantCreate(BaseModel):
+    name: str = Field(examples=["Acme Corp"])
+
+class TenantOut(BaseModel):
+    id: UUID
+    name: str
+    created_at: datetime
+    root_resource_id: Optional[UUID] = None
+
+class PrincipalCreate(BaseModel):
+    id: Optional[UUID] = Field(default=None, examples=["11111111-1111-1111-1111-111111111111"])
+    kind: str = Field(default="user", examples=["user"])
+    status: str = Field(default="active", examples=["active"])
+    display_name: str = Field(examples=["Dev User"])
+    email: Optional[str] = Field(default=None, examples=["dev@example.com"])
+
+class PrincipalOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+    kind: str
+    status: str
+    display_name: str
+    email: Optional[str]
+    created_at: datetime
+
+class ResourceCreate(BaseModel):
+    type: str = Field(examples=["Project"])
+    parent_id: UUID = Field(examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"])
+    name: str = Field(examples=["Roadmap"])
+    metadata: Dict[str, Any] = Field(default_factory=dict, examples=[{"break_inheritance": False}])
+
+class ResourceUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, examples=["Updated name"])
+    status: Optional[str] = Field(default=None, examples=["archived"])
+    metadata: Optional[Dict[str, Any]] = Field(default=None, examples=[{"break_inheritance": True}])
+
+class ResourceMove(BaseModel):
+    new_parent_id: UUID = Field(examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"])
+
+class ResourceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: UUID
+    tenant_id: UUID
+    type: str
+    parent_id: Optional[UUID] = None
+    owner_principal_id: UUID
+    name: str
+    status: str
+    metadata: Dict[str, Any] = Field(alias="metadata_json")
+    created_at: datetime
+    updated_at: datetime
+
+class ResourcePage(BaseModel):
+    items: List[ResourceOut]
+    next_cursor: Optional[str] = None
+
+class ResourceTree(BaseModel):
+    resource: ResourceOut
+    children: List["ResourceTree"] = Field(default_factory=list)
+
+class RoleBindingCreate(BaseModel):
+    principal_id: UUID
+    role_name: str = Field(examples=["viewer"])
+    scope_resource_id: UUID
+
+class RoleBindingOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+    principal_id: UUID
+    scope_resource_id: UUID
+    role_name: str
+    granted_by: UUID
+    granted_at: datetime
+    revoked_at: Optional[datetime] = None
+
+class EffectivePermissionsOut(BaseModel):
+    principal_id: UUID
+    resource_id: UUID
+    permissions: List[str]
+
+class ActivityPage(BaseModel):
+    items: List[ActivityEventV1]
+    next_cursor: Optional[str] = None
+
+class BranchCreate(BaseModel):
+    ref_name: str = Field(examples=["feature-x"])
+    from_ref: str = Field(default="main", examples=["main"])
+
+class BranchOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    resource_id: UUID
+    ref_name: str
+    head_version_id: UUID
+    updated_by: UUID
+    updated_at: datetime
+
+class MergeRequestCreate(BaseModel):
+    target_resource_id: UUID
+    source_ref: str = Field(examples=["feature-x"])
+    target_ref: str = Field(default="main", examples=["main"])
+    title: Optional[str] = Field(default=None, examples=["Add metric"])
+    description: Optional[str] = Field(default=None, examples=["Implements new KPI"])
+    required_approvals: int = Field(default=1, ge=0, examples=[1])
+
+class MergeRequestOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+    mr_resource_id: UUID
+    target_resource_id: UUID
+    source_ref: str
+    target_ref: str
+    status: str
+    required_approvals: int
+    title: Optional[str]
+    description: Optional[str]
+    created_by: UUID
+    created_at: datetime
+    updated_at: datetime
+
+class MergeApprovalIn(BaseModel):
+    decision: str = Field(examples=["approve"])
+    comment: Optional[str] = Field(default=None, examples=["Looks good"])
+
+class MergeApprovalOut(BaseModel):
+    mr_id: UUID
+    decision: str
+    approvals: int
+    rejects: int
+    required_approvals: int
+    status: str
+
+class MergeExecuteOut(BaseModel):
+    mr_id: UUID
+    target_resource_id: UUID
+    target_ref: str
+    new_version_id: UUID
+    status: str
+
+class SubscriptionCreate(BaseModel):
+    resource_id: UUID
+    scope: str = Field(default="resource", examples=["resource"])
+
+class SubscriptionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+    principal_id: UUID
+    resource_id: UUID
+    scope: str
+    created_at: datetime
+    revoked_at: Optional[datetime] = None
+
+class PromotionCreate(BaseModel):
+    moving_resource_id: UUID
+    to_scope_id: UUID
+    placement: Dict[str, Any] = Field(
+        default_factory=dict, examples=[{"target": "destination"}]
+    )
+    mode: str = Field(examples=["move"])
+    rbac_template_ref: Optional[str] = Field(default=None, examples=["default"])
+
+class PromotionRequestOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: UUID
+    tenant_id: UUID
+    pr_resource_id: UUID
+    moving_resource_id: UUID
+    from_scope_id: Optional[UUID] = None
+    to_scope_id: UUID
+    placement: Dict[str, Any] = Field(alias="placement_json")
+    rbac_template_ref: Optional[str]
+    mode: str
+    status: str
+    required_approvals: int
+    created_by: UUID
+    created_at: datetime
+    updated_at: datetime
+
+class PromotionApprovalIn(BaseModel):
+    decision: str = Field(examples=["approve"])
+    comment: Optional[str] = Field(default=None, examples=["Looks good"])
+
+class PromotionApprovalOut(BaseModel):
+    pr_id: UUID
+    decision: str
+    approvals: int
+    rejects: int
+    required_approvals: int
+    status: str
+
+class PromotionExecuteOut(BaseModel):
+    pr_id: UUID
+    status: str
+    mode: str
+    new_root_id: Optional[UUID]
+    moved_count: int
+    copied_count: int
+
+class RealtimeTokenRequest(BaseModel):
+    channels: List[str] = Field(
+        default_factory=list,
+        examples=[
+            [
+                "t:11111111-1111-1111-1111-111111111111:u:22222222-2222-2222-2222-222222222222",
+                "t:11111111-1111-1111-1111-111111111111:r:33333333-3333-3333-3333-333333333333",
+                "t:11111111-1111-1111-1111-111111111111:c:44444444-4444-4444-4444-444444444444",
+            ]
+        ],
+    )
+
+class RealtimeTokenResponse(BaseModel):
+    connection_token: str
+    subscriptions: Dict[str, str] = Field(default_factory=dict)
+
+class RealtimeBootstrapChannel(BaseModel):
+    id: UUID
+    name: str
+    channel: str
+
+class RealtimeBootstrapResource(BaseModel):
+    resource_id: UUID
+    channel: str
+
+class RealtimeBootstrapResponse(BaseModel):
+    tenant_id: UUID
+    principal_id: UUID
+    inbox_channel: str
+    chat_channels: List[RealtimeBootstrapChannel] = Field(default_factory=list)
+    resource_subscriptions: List[RealtimeBootstrapResource] = Field(default_factory=list)
+    connection_token: str
+    subscription_tokens: Dict[str, str] = Field(default_factory=dict)
+
+class SystemUpgradePlanIn(BaseModel):
+    with_redis: bool = False
+    check_package_updates: bool = False
+
+
+class SystemUpgradeStartIn(BaseModel):
+    with_redis: bool = False
+    apply_package_update: bool = True
+    restart: bool = True
+
+
+class SystemPackageUpdate(BaseModel):
+    package: str
+    current_version: str
+    latest_version: str
+    has_update: bool
+    source: str
+    index_url: Optional[str] = None
+    checked_at: str
+    message: Optional[str] = None
+
+
+class SystemInfraAction(BaseModel):
+    tool: str
+    version: str
+    asset_url: str
+    asset_sha256: str
+
+
+class SystemUpgradePlan(BaseModel):
+    package_update: Optional[SystemPackageUpdate] = None
+    infra_plan: List[SystemInfraAction] = Field(default_factory=list)
+    db_migration_needed: bool
+    warnings: List[str] = Field(default_factory=list)
+
+
+class SystemUpgradeStart(BaseModel):
+    status: str
+    will_restart: bool
+    job_path: Optional[str] = None
+    message: Optional[str] = None
+
+
+class SystemRuntimeStatus(BaseModel):
+    ok: bool = True
+    version: str
+    channel: Optional[str] = None
+    package_index_url: Optional[str] = None
+    db_dialect: Optional[str] = None
+    db_alembic_head: Optional[str] = None
+    tools: Dict[str, Any] = Field(default_factory=dict)
+    centrifugo_engine: str
+    with_redis: bool
+    last_upgrade_at: Optional[str] = None
+    upgrade_status: Dict[str, Any] = Field(default_factory=dict)
+
+
+class PrefectConfigOut(BaseModel):
+    enabled: bool
+    bind_host: str
+    port: int
+    api_url: str
+    home_dir: str
+    work_pool: str
+    worker_limit: int
+
+
+class MlflowConfigOut(BaseModel):
+    enabled: bool
+    bind_host: str
+    port: int
+    tracking_uri: str
+    backend_store_uri: str
+    artifacts_mode: Literal["direct", "proxied"]
+    default_artifact_root: str
+
+
+class SystemConfig(BaseModel):
+    data_dir: str
+    prefect: PrefectConfigOut
+    mlflow: MlflowConfigOut
+
+
+class SystemChannelUpdate(BaseModel):
+    channel: Literal["prod", "uat", "staging"]
+
+
+class SystemChannelStatus(BaseModel):
+    channel: str
+    package_index_url: Optional[str] = None
+
+class ChannelCreate(BaseModel):
+    parent_id: UUID = Field(examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"])
+    channel_kind: str = Field(examples=["group"])
+    name: str = Field(examples=["Product Updates"])
+    topic: Optional[str] = Field(default=None, examples=["Roadmap discussion"])
+    settings: Dict[str, Any] = Field(default_factory=dict)
+
+class ChannelOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    resource_id: UUID
+    tenant_id: UUID
+    channel_kind: str
+    topic: Optional[str] = None
+    settings: Dict[str, Any]
+    created_at: datetime
+
+class MessageCreate(BaseModel):
+    body: str = Field(examples=["Hello world"])
+    body_json: Optional[Dict[str, Any]] = None
+
+class MessageUpdate(BaseModel):
+    body: str = Field(examples=["Updated message"])
+    body_json: Optional[Dict[str, Any]] = None
+
+class MessageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+    channel_id: UUID
+    sender_principal_id: UUID
+    body: Optional[str]
+    body_json: Optional[Dict[str, Any]]
+    status: str
+    edited_at: Optional[datetime]
+    created_at: datetime
+
+class MessagePage(BaseModel):
+    items: List[MessageOut]
+    next_cursor: Optional[str] = None
+
+class ReadReceiptIn(BaseModel):
+    last_read_message_id: UUID
+
+class ReadReceiptOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    tenant_id: UUID
+    channel_id: UUID
+    principal_id: UUID
+    last_read_message_id: Optional[UUID]
+    updated_at: datetime
+
+class AttachmentUploadInitIn(BaseModel):
+    channel_id: UUID = Field(examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"])
+    filename: str = Field(examples=["design.png"])
+    content_type: str = Field(examples=["image/png"])
+    bytes: int = Field(examples=[1048576])
+    checksum: Optional[str] = Field(default=None, examples=["sha256:deadbeef"])
+
+class AttachmentUploadInitOut(BaseModel):
+    presigned_put_url: str
+    upload_url: Optional[str] = None
+    object_key: str
+    headers: Dict[str, str] = Field(default_factory=dict)
+    expires_in: int = Field(examples=[900])
+
+class AttachmentFinalizeIn(BaseModel):
+    message_id: UUID
+    object_key: str
+    checksum: Optional[str] = Field(default=None, examples=["md5:deadbeef"])
+
+class AttachmentFinalizeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+    message_id: UUID
+    object_key: str
+    filename: str
+    content_type: str
+    bytes: int
+    checksum: str
+    created_at: datetime
+
+ResourceTree.model_rebuild()
