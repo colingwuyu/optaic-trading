@@ -45,6 +45,8 @@ htmlcov/
 # Type checking
 .mypy_cache/
 .pytype/
+.ruff_cache/
+.venv-wheel/
 
 # Temp files
 .tmp/
@@ -56,9 +58,15 @@ htmlcov/
 Thumbs.db
 
 # Lock files (optional - keep uv.lock for reproducibility)
-# uv.lock
 
-# Local config (if sensitive)
+# Explicitly allow .agent folder for agent rules
+!.agent/
+!/.agent/
+!.agent/**
+!.claude/
+!/.claude/
+!.claude/**
+
 # optaic.toml
 
 # Runtime state (generated at runtime)

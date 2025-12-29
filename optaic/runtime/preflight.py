@@ -16,8 +16,6 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Literal
 
 from optaic.runtime.runtime_config import RuntimeConfig
 from optaic.runtime.upgrade_manager import acquire_lock, LockHandle
@@ -167,9 +165,9 @@ def _format_migration_error(engine: str, result: object) -> str:
     msg = f"{engine} migration failed: {error}"
     if backup:
         msg += f"\n  Backup available at: {backup}"
-        msg += f"\n  To restore, copy the backup back to the original location."
-    msg += f"\n  Options:"
-    msg += f"\n    --allow-engine-downgrade  Allow running with older version (dangerous)"
+        msg += "\n  To restore, copy the backup back to the original location."
+    msg += "\n  Options:"
+    msg += "\n    --allow-engine-downgrade  Allow running with older version (dangerous)"
     msg += f"\n    --reset-{engine.lower()}-db  Delete and recreate DB (loses data)"
     return msg
 

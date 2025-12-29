@@ -6,7 +6,6 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 import json
 
-import pytest
 
 from optaic.runtime import engine_migrations as em
 from optaic.runtime import engines_state as es

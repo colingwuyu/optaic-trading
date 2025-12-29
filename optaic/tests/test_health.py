@@ -5,10 +5,7 @@ from __future__ import annotations
 import http.server
 import socket
 import threading
-from pathlib import Path
-from unittest.mock import patch
 
-import pytest
 
 from optaic.runtime import health
 

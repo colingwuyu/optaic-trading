@@ -12,6 +12,7 @@ from starlette.staticfiles import StaticFiles
 from apps.api.routers.activities import router as activities_router
 from apps.api.routers.attachments import router as attachments_router
 from apps.api.routers.chat import router as chat_router
+from apps.api.routers.guardrails import router as guardrails_router
 from apps.api.routers.health import router as health_router
 from apps.api.routers.merge_requests import router as merge_requests_router
 from apps.api.routers.principals import router as principals_router
@@ -97,6 +98,7 @@ app.include_router(rbac_router)
 app.include_router(activities_router)
 app.include_router(attachments_router)
 app.include_router(chat_router)
+app.include_router(guardrails_router)
 app.include_router(realtime_router)
 app.include_router(refs_router)
 app.include_router(merge_requests_router)

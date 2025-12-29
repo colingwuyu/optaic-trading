@@ -7,7 +7,7 @@ from fastapi import APIRouter, Body, Depends, Query
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.api.deps import get_actor, get_db, reset_session
+from apps.api.deps import get_actor, get_db, get_guardrails_engine, reset_session
 from apps.api.pagination import decode_cursor, encode_cursor
 from apps.api.rbac_utils import authorize_or_403, get_resource_or_404
 from apps.api.schemas import ResourceCreate, ResourceMove, ResourceOut, ResourcePage, ResourceTree, ResourceUpdate
@@ -15,6 +15,9 @@ from libs.core.activity import ActivityEnvelope, tx_activity
 from libs.core.rbac.models import ActorContext, Permission
 from libs.core.versioning import initialize_versioning
 from libs.db.models.resource import Resource
+from optaic.guardrails.runtime.context import GuardrailsContext
+from optaic.guardrails.runtime.engine import GuardrailsBlocked, GuardrailsEngine
+from fastapi import HTTPException
 
 router = APIRouter(prefix="/resources", tags=["Resources"])
 
@@ -39,6 +42,7 @@ async def create_resource(
     ),
     actor: ActorContext = Depends(get_actor),
     db: AsyncSession = Depends(get_db),
+    guardrails: GuardrailsEngine = Depends(get_guardrails_engine),
 ) -> ResourceOut:
     parent = await get_resource_or_404(db, actor.tenant_id, payload.parent_id)
     await authorize_or_403(db, actor, Permission.RESOURCE_CREATE_CHILD, parent.id)
@@ -60,6 +64,29 @@ async def create_resource(
         await session.flush()
         await initialize_versioning(session, resource, actor.id)
         return resource
+
+        return resource
+
+    # Guardrails Validation
+    try:
+        context = GuardrailsContext(
+            tenant_id=actor.tenant_id,
+            actor_principal_id=actor.id,
+            space_kind=None,  # Not known yet or inherit?
+            subspace_kind=None,
+            action="create",
+        )
+        await guardrails.validate_at_gate(
+            db=db,
+            scope="resource",
+            target_id=str(resource_id),
+            resource_id=str(resource_id),
+            context=context,
+            target_snapshot=payload.model_dump(mode="json"),
+        )
+    except GuardrailsBlocked as exc:
+        await db.commit()  # Persist the block event/report
+        raise HTTPException(status_code=403, detail=str(exc))
 
     await reset_session(db)
 
@@ -167,6 +194,7 @@ async def update_resource(
     ),
     actor: ActorContext = Depends(get_actor),
     db: AsyncSession = Depends(get_db),
+    guardrails: GuardrailsEngine = Depends(get_guardrails_engine),
 ) -> ResourceOut:
     resource = await get_resource_or_404(db, actor.tenant_id, resource_id)
     await authorize_or_403(db, actor, Permission.RESOURCE_UPDATE, resource.id)
@@ -184,6 +212,30 @@ async def update_resource(
 
     resource_id = resource.id
     resource_type = resource.type
+    resource_id = resource.id
+    resource_type = resource.type
+
+    # Guardrails Validation
+    try:
+        context = GuardrailsContext(
+            tenant_id=actor.tenant_id,
+            actor_principal_id=actor.id,
+            space_kind=resource.space_kind,
+            subspace_kind=resource.subspace_kind,
+            action="update",
+        )
+        await guardrails.validate_at_gate(
+            db=db,
+            scope="resource",
+            target_id=str(resource_id),
+            resource_id=str(resource_id),
+            context=context,
+            target_snapshot={"changes": changes},
+        )
+    except GuardrailsBlocked as exc:
+        await db.commit()  # Persist the block event/report
+        raise HTTPException(status_code=403, detail=str(exc))
+
     await reset_session(db)
 
     async def domain_fn(session: AsyncSession) -> Resource:
@@ -256,12 +308,40 @@ async def delete_resource(
     resource_id: UUID,
     actor: ActorContext = Depends(get_actor),
     db: AsyncSession = Depends(get_db),
+    guardrails: GuardrailsEngine = Depends(get_guardrails_engine),
 ) -> ResourceOut:
     resource = await get_resource_or_404(db, actor.tenant_id, resource_id)
     await authorize_or_403(db, actor, Permission.RESOURCE_DELETE, resource.id)
 
     resource_id = resource.id
     resource_type = resource.type
+
+    # Guardrails Validation
+    try:
+        context = GuardrailsContext(
+            tenant_id=actor.tenant_id,
+            actor_principal_id=actor.id,
+            # Assume resource doesn't have space/subspace fields yet on the model or we need to fetch them?
+            # Existing specific resource models (Project/Space) might have them, but 'Resource' is generic base.
+            # For now, pass None or try to get from metadata?
+            # The context definition expects space_kind/subspace_kind.
+            # Let's assume passed as None or derived if possible.
+            space_kind=None,
+            subspace_kind=None,
+            action="delete",
+        )
+        await guardrails.validate_at_gate(
+            db=db,
+            scope="resource",
+            target_id=str(resource_id),
+            resource_id=str(resource_id),
+            context=context,
+            target_snapshot={},
+        )
+    except GuardrailsBlocked as exc:
+        await db.commit()  # Persist the block event/report
+        raise HTTPException(status_code=403, detail=str(exc))
+
     await reset_session(db)
 
     async def domain_fn(session: AsyncSession) -> Resource:

@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
-import pytest
 
 from optaic.runtime import doctor
 from optaic.runtime.runtime_config import RuntimeConfig, PrefectConfig, MlflowConfig

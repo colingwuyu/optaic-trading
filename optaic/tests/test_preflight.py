@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from optaic.runtime import preflight
 from optaic.runtime.runtime_config import RuntimeConfig, PrefectConfig, MlflowConfig

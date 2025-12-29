@@ -13,7 +13,6 @@ Provides actionable diagnostics for troubleshooting:
 from __future__ import annotations
 
 import json
-import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,7 +20,6 @@ from typing import Literal
 
 from optaic.runtime.health import (
     check_service_health,
-    ServiceHealth,
     tcp_check,
 )
 from optaic.runtime.ports import is_port_available

@@ -2096,6 +2096,15 @@ name = "optaic"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "packaging" },
+    { name = "platformdirs" },
+    { name = "pydantic-settings" },
+    { name = "structlog" },
+    { name = "typer" },
+]
+
+[package.optional-dependencies]
+all = [
     { name = "aiosqlite" },
     { name = "alembic" },
     { name = "asyncpg" },
@@ -2103,64 +2112,200 @@ dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "mlflow" },
-    { name = "packaging" },
-    { name = "platformdirs" },
     { name = "prefect" },
     { name = "pycasbin" },
-    { name = "pydantic-settings" },
     { name = "pyjwt" },
+    { name = "python-dotenv" },
     { name = "redis" },
     { name = "sqlalchemy", extra = ["asyncio"] },
-    { name = "structlog" },
-    { name = "typer" },
     { name = "uvicorn", extra = ["standard"] },
+    { name = "websockets" },
 ]
-
-[package.dev-dependencies]
+client = [
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "typing-extensions" },
+]
 dev = [
+    { name = "aiosqlite" },
+    { name = "alembic" },
+    { name = "asyncpg" },
+    { name = "boto3" },
     { name = "build" },
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "mlflow" },
     { name = "moto" },
     { name = "mypy" },
     { name = "pre-commit" },
+    { name = "prefect" },
+    { name = "pycasbin" },
+    { name = "pyjwt" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "python-dotenv" },
+    { name = "redis" },
     { name = "ruff" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "twine" },
+    { name = "uvicorn", extra = ["standard"] },
+    { name = "websockets" },
+]
+engines = [
+    { name = "mlflow" },
+    { name = "prefect" },
+]
+full = [
+    { name = "aiosqlite" },
+    { name = "alembic" },
+    { name = "asyncpg" },
+    { name = "boto3" },
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "mlflow" },
+    { name = "prefect" },
+    { name = "pycasbin" },
+    { name = "pyjwt" },
+    { name = "python-dotenv" },
+    { name = "redis" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "uvicorn", extra = ["standard"] },
+    { name = "websockets" },
+]
+guardrails = [
+    { name = "jsonschema" },
+    { name = "pydantic" },
+]
+guardrails-dev = [
+    { name = "pytest" },
+    { name = "ruff" },
+]
+mlflow = [
+    { name = "mlflow" },
+]
+monitoring = [
+    { name = "pandera" },
+]
+prefect = [
+    { name = "prefect" },
+]
+realtime = [
+    { name = "pyjwt" },
+    { name = "websockets" },
+]
+redis = [
+    { name = "redis" },
+]
+sdk = [
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "typing-extensions" },
+]
+server = [
+    { name = "aiosqlite" },
+    { name = "alembic" },
+    { name = "asyncpg" },
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "pycasbin" },
+    { name = "python-dotenv" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "uvicorn", extra = ["standard"] },
+]
+storage = [
+    { name = "boto3" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "aiosqlite", specifier = ">=0.20.0" },
-    { name = "alembic", specifier = ">=1.13.1" },
-    { name = "asyncpg", specifier = ">=0.29.0" },
-    { name = "boto3", specifier = ">=1.34.0" },
-    { name = "fastapi", specifier = ">=0.109.0" },
-    { name = "httpx", specifier = ">=0.26.0" },
-    { name = "mlflow", specifier = ">=2.12.0,<3" },
+    { name = "aiosqlite", marker = "extra == 'all'", specifier = ">=0.20.0" },
+    { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.20.0" },
+    { name = "aiosqlite", marker = "extra == 'full'", specifier = ">=0.20.0" },
+    { name = "aiosqlite", marker = "extra == 'server'", specifier = ">=0.20.0" },
+    { name = "alembic", marker = "extra == 'all'", specifier = ">=1.13.1" },
+    { name = "alembic", marker = "extra == 'dev'", specifier = ">=1.13.1" },
+    { name = "alembic", marker = "extra == 'full'", specifier = ">=1.13.1" },
+    { name = "alembic", marker = "extra == 'server'", specifier = ">=1.13.1" },
+    { name = "asyncpg", marker = "extra == 'all'", specifier = ">=0.29.0" },
+    { name = "asyncpg", marker = "extra == 'dev'", specifier = ">=0.29.0" },
+    { name = "asyncpg", marker = "extra == 'full'", specifier = ">=0.29.0" },
+    { name = "asyncpg", marker = "extra == 'server'", specifier = ">=0.29.0" },
+    { name = "boto3", marker = "extra == 'all'", specifier = ">=1.34.0" },
+    { name = "boto3", marker = "extra == 'dev'", specifier = ">=1.34.0" },
+    { name = "boto3", marker = "extra == 'full'", specifier = ">=1.34.0" },
+    { name = "boto3", marker = "extra == 'storage'", specifier = ">=1.34.0" },
+    { name = "build", marker = "extra == 'dev'", specifier = ">=1.2.1" },
+    { name = "fastapi", marker = "extra == 'all'", specifier = ">=0.109.0" },
+    { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.109.0" },
+    { name = "fastapi", marker = "extra == 'full'", specifier = ">=0.109.0" },
+    { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.109.0" },
+    { name = "httpx", marker = "extra == 'all'", specifier = ">=0.26.0" },
+    { name = "httpx", marker = "extra == 'client'", specifier = ">=0.26.0" },
+    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.26.0" },
+    { name = "httpx", marker = "extra == 'full'", specifier = ">=0.26.0" },
+    { name = "httpx", marker = "extra == 'sdk'", specifier = ">=0.26.0" },
+    { name = "httpx", marker = "extra == 'server'", specifier = ">=0.26.0" },
+    { name = "jsonschema", marker = "extra == 'guardrails'", specifier = ">=4.20.0" },
+    { name = "mlflow", marker = "extra == 'all'", specifier = ">=2.12.0,<3" },
+    { name = "mlflow", marker = "extra == 'dev'", specifier = ">=2.12.0,<3" },
+    { name = "mlflow", marker = "extra == 'engines'", specifier = ">=2.12.0,<3" },
+    { name = "mlflow", marker = "extra == 'full'", specifier = ">=2.12.0,<3" },
+    { name = "mlflow", marker = "extra == 'mlflow'", specifier = ">=2.12.0,<3" },
+    { name = "moto", marker = "extra == 'dev'", specifier = ">=5.0.0" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8.0" },
     { name = "packaging", specifier = ">=24.0" },
+    { name = "pandera", marker = "extra == 'monitoring'", specifier = ">=0.18.0" },
     { name = "platformdirs", specifier = ">=4.2.0" },
-    { name = "prefect", specifier = ">=3.0.0,<4" },
-    { name = "pycasbin", specifier = ">=1.36.0" },
+    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.6.1" },
+    { name = "prefect", marker = "extra == 'all'", specifier = ">=3.0.0,<4" },
+    { name = "prefect", marker = "extra == 'dev'", specifier = ">=3.0.0,<4" },
+    { name = "prefect", marker = "extra == 'engines'", specifier = ">=3.0.0,<4" },
+    { name = "prefect", marker = "extra == 'full'", specifier = ">=3.0.0,<4" },
+    { name = "prefect", marker = "extra == 'prefect'", specifier = ">=3.0.0,<4" },
+    { name = "pycasbin", marker = "extra == 'all'", specifier = ">=1.36.0" },
+    { name = "pycasbin", marker = "extra == 'dev'", specifier = ">=1.36.0" },
+    { name = "pycasbin", marker = "extra == 'full'", specifier = ">=1.36.0" },
+    { name = "pycasbin", marker = "extra == 'server'", specifier = ">=1.36.0" },
+    { name = "pydantic", marker = "extra == 'client'", specifier = ">=2.0.0" },
+    { name = "pydantic", marker = "extra == 'guardrails'", specifier = ">=2" },
+    { name = "pydantic", marker = "extra == 'sdk'", specifier = ">=2.0.0" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
-    { name = "pyjwt", specifier = ">=2.8.0" },
-    { name = "redis", specifier = ">=5.0.1" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.25" },
+    { name = "pyjwt", marker = "extra == 'all'", specifier = ">=2.8.0" },
+    { name = "pyjwt", marker = "extra == 'dev'", specifier = ">=2.8.0" },
+    { name = "pyjwt", marker = "extra == 'full'", specifier = ">=2.8.0" },
+    { name = "pyjwt", marker = "extra == 'realtime'", specifier = ">=2.8.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest", marker = "extra == 'guardrails-dev'" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.5" },
+    { name = "python-dotenv", marker = "extra == 'all'", specifier = ">=1.0.0" },
+    { name = "python-dotenv", marker = "extra == 'dev'", specifier = ">=1.0.0" },
+    { name = "python-dotenv", marker = "extra == 'full'", specifier = ">=1.0.0" },
+    { name = "python-dotenv", marker = "extra == 'server'", specifier = ">=1.0.0" },
+    { name = "redis", marker = "extra == 'all'", specifier = ">=5.0.1,<6" },
+    { name = "redis", marker = "extra == 'dev'", specifier = ">=5.0.1,<6" },
+    { name = "redis", marker = "extra == 'full'", specifier = ">=5.0.1,<6" },
+    { name = "redis", marker = "extra == 'redis'", specifier = ">=5.0.1,<6" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.2.1" },
+    { name = "ruff", marker = "extra == 'guardrails-dev'" },
+    { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'all'", specifier = ">=2.0.25" },
+    { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'dev'", specifier = ">=2.0.25" },
+    { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'full'", specifier = ">=2.0.25" },
+    { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'server'", specifier = ">=2.0.25" },
     { name = "structlog", specifier = ">=24.0.0" },
+    { name = "twine", marker = "extra == 'dev'", specifier = ">=5.0.0" },
     { name = "typer", specifier = ">=0.12.0" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.27.0" },
+    { name = "typing-extensions", marker = "extra == 'client'", specifier = ">=4.9.0" },
+    { name = "typing-extensions", marker = "extra == 'sdk'", specifier = ">=4.9.0" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'all'", specifier = ">=0.27.0" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'dev'", specifier = ">=0.27.0" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'full'", specifier = ">=0.27.0" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'server'", specifier = ">=0.27.0" },
+    { name = "websockets", marker = "extra == 'all'", specifier = ">=12.0" },
+    { name = "websockets", marker = "extra == 'dev'", specifier = ">=12.0" },
+    { name = "websockets", marker = "extra == 'full'", specifier = ">=12.0" },
+    { name = "websockets", marker = "extra == 'realtime'", specifier = ">=12.0" },
 ]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "build", specifier = ">=1.2.1" },
-    { name = "moto", specifier = ">=5.0.0" },
-    { name = "mypy", specifier = ">=1.8.0" },
-    { name = "pre-commit", specifier = ">=3.6.1" },
-    { name = "pytest", specifier = ">=8.0.0" },
-    { name = "pytest-asyncio", specifier = ">=0.23.5" },
-    { name = "ruff", specifier = ">=0.2.1" },
-    { name = "twine", specifier = ">=5.0.0" },
-]
+provides-extras = ["sdk", "client", "server", "realtime", "prefect", "mlflow", "redis", "storage", "monitoring", "guardrails", "guardrails-dev", "engines", "all", "full", "dev"]
 
 [[package]]
 name = "orjson"
@@ -2291,6 +2436,22 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/a4/1e/1bac1a839d12e6a82ec6cb40cda2edde64a2013a66963293696bbf31fbbb/pandas-2.3.3-cp314-cp314t-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:2e3ebdb170b5ef78f19bfb71b0dc5dc58775032361fa188e814959b74d726dd5", size = 12121582, upload-time = "2025-09-29T23:30:43.391Z" },
     { url = "https://files.pythonhosted.org/packages/44/91/483de934193e12a3b1d6ae7c8645d083ff88dec75f46e827562f1e4b4da6/pandas-2.3.3-cp314-cp314t-musllinux_1_2_aarch64.whl", hash = "sha256:d051c0e065b94b7a3cea50eb1ec32e912cd96dba41647eb24104b6c6c14c5788", size = 12699963, upload-time = "2025-09-29T23:31:10.009Z" },
     { url = "https://files.pythonhosted.org/packages/70/44/5191d2e4026f86a2a109053e194d3ba7a31a2d10a9c2348368c63ed4e85a/pandas-2.3.3-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:3869faf4bd07b3b66a9f462417d0ca3a9df29a9f6abd5d0d0dbab15dac7abe87", size = 13202175, upload-time = "2025-09-29T23:31:59.173Z" },
+]
+
+[[package]]
+name = "pandera"
+version = "0.27.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+    { name = "pydantic" },
+    { name = "typeguard" },
+    { name = "typing-extensions" },
+    { name = "typing-inspect" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ca/c9/4793ab905872b2bbc324530ba4b15d442540a17defa415eca5a5da8810d0/pandera-0.27.1.tar.gz", hash = "sha256:642493c04ef16eb03704edf35b0f40ddea32d93e2c3bed3cb3a20895c395bbf4", size = 568731, upload-time = "2025-12-22T19:02:31.925Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3a/83/3426f132ed2326c65f7edcd1a4a5a81955f8dba55ebdbcd7026caaa0a1b8/pandera-0.27.1-py3-none-any.whl", hash = "sha256:944838f134035bbc548410943be662379669488e00f3d290ff2c36b6df52665e", size = 296615, upload-time = "2025-12-22T19:02:30.465Z" },
 ]
 
 [[package]]
@@ -3053,14 +3214,15 @@ wheels = [
 
 [[package]]
 name = "redis"
-version = "7.1.0"
+version = "5.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "async-timeout", marker = "python_full_version < '3.11.3'" },
+    { name = "pyjwt" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/43/c8/983d5c6579a411d8a99bc5823cc5712768859b5ce2c8afe1a65b37832c81/redis-7.1.0.tar.gz", hash = "sha256:b1cc3cfa5a2cb9c2ab3ba700864fb0ad75617b41f01352ce5779dabf6d5f9c3c", size = 4796669, upload-time = "2025-11-19T15:54:39.961Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6a/cf/128b1b6d7086200c9f387bd4be9b2572a30b90745ef078bd8b235042dc9f/redis-5.3.1.tar.gz", hash = "sha256:ca49577a531ea64039b5a36db3d6cd1a0c7a60c34124d46924a45b956e8cf14c", size = 4626200, upload-time = "2025-07-25T08:06:27.778Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/89/f0/8956f8a86b20d7bb9d6ac0187cf4cd54d8065bc9a1a09eb8011d4d326596/redis-7.1.0-py3-none-any.whl", hash = "sha256:23c52b208f92b56103e17c5d06bdc1a6c2c0b3106583985a76a18f83b265de2b", size = 354159, upload-time = "2025-11-19T15:54:38.064Z" },
+    { url = "https://files.pythonhosted.org/packages/7f/26/5c5fa0e83c3621db835cfc1f1d789b37e7fa99ed54423b5f519beb931aa7/redis-5.3.1-py3-none-any.whl", hash = "sha256:dc1909bd24669cc31b5f67a039700b16ec30571096c5f1f0d9d2324bff31af97", size = 272833, upload-time = "2025-07-25T08:06:26.317Z" },
 ]
 
 [[package]]
@@ -3798,6 +3960,18 @@ wheels = [
 ]
 
 [[package]]
+name = "typeguard"
+version = "4.4.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c7/68/71c1a15b5f65f40e91b65da23b8224dad41349894535a97f63a52e462196/typeguard-4.4.4.tar.gz", hash = "sha256:3a7fd2dffb705d4d0efaed4306a704c89b9dee850b688f060a8b1615a79e5f74", size = 75203, upload-time = "2025-06-18T09:56:07.624Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1b/a9/e3aee762739c1d7528da1c3e06d518503f8b6c439c35549b53735ba52ead/typeguard-4.4.4-py3-none-any.whl", hash = "sha256:b5f562281b6bfa1f5492470464730ef001646128b180769880468bd84b68b09e", size = 34874, upload-time = "2025-06-18T09:56:05.999Z" },
+]
+
+[[package]]
 name = "typer"
 version = "0.20.1"
 source = { registry = "https://pypi.org/simple" }
@@ -3819,6 +3993,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/72/94/1a15dd82efb362ac84269196e94cf00f187f7ed21c242792a923cdb1c61f/typing_extensions-4.15.0.tar.gz", hash = "sha256:0cea48d173cc12fa28ecabc3b837ea3cf6f38c6d1136f85cbaaf598984861466", size = 109391, upload-time = "2025-08-25T13:49:26.313Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/18/67/36e9267722cc04a6b9f15c7f3441c2363321a3ea07da7ae0c0707beb2a9c/typing_extensions-4.15.0-py3-none-any.whl", hash = "sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548", size = 44614, upload-time = "2025-08-25T13:49:24.86Z" },
+]
+
+[[package]]
+name = "typing-inspect"
+version = "0.9.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mypy-extensions" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/dc/74/1789779d91f1961fa9438e9a8710cdae6bd138c80d7303996933d117264a/typing_inspect-0.9.0.tar.gz", hash = "sha256:b23fc42ff6f6ef6954e4852c1fb512cdd18dbea03134f91f856a95ccc9461f78", size = 13825, upload-time = "2023-05-24T20:25:47.612Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/65/f3/107a22063bf27bdccf2024833d3445f4eea42b2e598abfbd46f6a63b6cb0/typing_inspect-0.9.0-py3-none-any.whl", hash = "sha256:9ee6fc59062311ef8547596ab6b955e1b8aa46242d854bfc78f4f6b0eff35f9f", size = 8827, upload-time = "2023-05-24T20:25:45.287Z" },
 ]
 
 [[package]]

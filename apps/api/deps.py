@@ -77,3 +77,9 @@ async def get_agent_meta(
 async def reset_session(db: AsyncSession) -> None:
     if db.in_transaction():
         await db.rollback()
+
+
+def get_guardrails_engine() -> "GuardrailsEngine":  # noqa: F821
+    from optaic.guardrails.runtime.engine import GuardrailsEngine
+
+    return GuardrailsEngine()

@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch
 import json
 import socket
 
-import pytest
 
 from optaic.runtime import ports
 

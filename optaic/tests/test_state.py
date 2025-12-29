@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 
 from optaic.runtime import state
 from optaic.runtime.runtime_config import RuntimeConfig, PrefectConfig, MlflowConfig
