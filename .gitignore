@@ -71,3 +71,5 @@ Thumbs.db
 
 # Runtime state (generated at runtime)
 # DATA_DIR contents are excluded by location, not pattern
+*.pdf
+*.docx

@@ -45,14 +45,30 @@ make build-webui                            # build React UI only
 ## Architecture
 
 ### Monorepo Structure
-- **optaic/**: Distributable CLI package + runtime supervisor
-- **apps/api/**: FastAPI application (serves UI, issues realtime tokens)
-- **apps/worker/**: Outbox consumer (publishes to Centrifugo, handles notifications)
-- **apps/agent/**: LLM agent runner (activity-driven)
-- **apps/web/**: React SPA frontend
-- **libs/core/**: Domain models, RBAC (PyCasbin), activity envelope, settings
-- **libs/db/**: SQLAlchemy models, session management, Alembic migrations
-- **libs/sdk_py/**: Python SDK client
+
+```
+optaic-trading/
+├── optaic/           # Distributable CLI package + runtime supervisor
+├── apps/
+│   ├── api/          # FastAPI application (serves UI, issues realtime tokens)
+│   ├── worker/       # Outbox consumer (publishes to Centrifugo)
+│   ├── agent/        # LLM agent runner (activity-driven)
+│   └── web/          # React SPA frontend
+├── libs/
+│   ├── core/         # Domain models, RBAC, activity envelope, settings
+│   ├── db/           # SQLAlchemy models, Alembic migrations
+│   ├── sdk_py/       # Python SDK client
+│   └── sdk_ts/       # TypeScript SDK client
+├── .claude/
+│   ├── agents/       # Claude Code specialized agents
+│   └── skills/       # Claude Code skill definitions
+├── .agent/
+│   ├── rules/        # Agentic rules
+│   └── workflows/    # Agentic workflows
+├── infra/            # Docker, Centrifugo, deployment configs
+├── scripts/          # Build, release, and utility scripts
+└── docs/             # Documentation
+```
 
 ### Key Patterns
 
@@ -85,6 +101,32 @@ make build-webui                            # build React UI only
 - React 18, Vite, Zustand, Tailwind CSS
 - PyCasbin (RBAC), structlog (logging)
 
+## Framework Compliance (IMPORTANT)
+
+**After completing any implementation task**, you MUST verify code follows OptAIC framework patterns.
+
+### Required Patterns Checklist
+
+| Component | Required Pattern |
+|-----------|-----------------|
+| Service mutations | Emit `ActivityEnvelope` via `record_activity_with_outbox()` |
+| Service create/update | Call `GuardrailsEngine.validate_at_gate()` |
+| API handlers | Return Pydantic DTOs, NOT SQLAlchemy models |
+| API handlers | Do NOT emit activities (service layer does this) |
+| Data pipelines | Include `knowledge_date` for PIT correctness |
+| SDK extensions | Use lazy imports for heavy deps (pandas, numpy) |
+
+### Compliance Workflow
+
+1. Complete implementation
+2. **Run compliance review** using one of these agents:
+   - `optaic-compliance-reviewer` - Full review + test generation
+   - `pre-commit-reviewer` - Pre-commit checks (lint, security, tests)
+3. Fix any violations
+4. Generate framework compliance tests
+5. Run tests with `pytest`
+6. Only then mark task complete
+
 ## Testing
 
 Tests use pytest with pytest-asyncio in auto mode. Test files are in each package's `tests/` directory:
@@ -107,3 +149,53 @@ Initialize the SQLite schema before debugging individual services:
 ```powershell
 optaic upgrade --apply
 ```
+
+## Claude Code Integration
+
+### Specialized Agents
+
+Use the Task tool with these agents for specific workflows:
+
+| Agent | Purpose | When to Use |
+|-------|---------|-------------|
+| `optaic-compliance-reviewer` | Framework compliance + tests | After any implementation |
+| `quant-domain-modeler` | Implement quant resources | Adding Dataset, Signal, Portfolio, etc. |
+| `data-pipeline-engineer` | Data pipelines, ETL, PIT | Building data ingestion/processing |
+| `sdk-extension-developer` | Extend Python SDK | Adding client methods |
+| `guardrails-contract-designer` | Validation contracts | Adding signal bounds, constraints |
+| `activity-audit-implementer` | Activity emission | Ensuring audit compliance |
+| `pre-commit-reviewer` | Lint, security, tests | Before committing |
+| `unit-test-generator` | Generate unit tests | After writing code |
+
+### Framework Skills (Reference)
+
+These skills provide detailed patterns - read them or reference when implementing:
+
+| Skill | Content |
+|-------|---------|
+| `code-review` | Review checklist, anti-patterns |
+| `code-test` | Test generation patterns |
+| `activity-logging` | ActivityEnvelope patterns |
+| `guardrails-contracts` | Validation contract design |
+| `quant-resource-patterns` | Domain resource patterns |
+| `data-pipeline-patterns` | PIT, Arrow, quality checks |
+| `sdk-patterns` | SDK extension patterns |
+
+### How Agents Use Skills
+
+Agents read skill files for detailed patterns:
+```
+Agent (optaic-compliance-reviewer)
+  ├── Reads: .claude/skills/code-review/SKILL.md
+  ├── Reads: .claude/skills/code-review/references/checklist.md
+  ├── Reads: .claude/skills/code-test/SKILL.md
+  └── Applies patterns to review/fix/test code
+```
+
+### Blueprint Reference
+
+The authoritative system specification is in `optaic_quant_platform_blueprint.md`. Consult it for:
+- Resource taxonomy (Definitions, Instances, Runs)
+- Governance rules (spaces, subspaces, promotion)
+- Activity event schemas
+- Pipeline semantics
