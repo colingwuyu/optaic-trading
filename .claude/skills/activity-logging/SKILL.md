@@ -44,9 +44,22 @@ Use pattern: `<resource>.<verb>`
 
 ### Core Resource Actions
 ```
-signal.created       signal.updated       signal.deleted
-dataset.created      dataset.updated      dataset.deleted
-dataset.refreshed    dataset.validated    dataset.schema_changed
+signal.registered    signal.validated     signal.promoted
+dataset.created      dataset.previewed    dataset.refresh_started
+dataset.refresh_completed dataset.refresh_failed
+```
+
+### Pipeline Actions
+```
+pipeline_def.submitted   pipeline_def.deployed
+pipeline_instance.created pipeline.run_started pipeline.run_completed
+```
+
+### Experiment Actions
+```
+experiment.created   experiment.updated
+experiment.run_completed experiment.run_failed
+expression.evaluated macro.saved
 ```
 
 ### Run Lifecycle Actions

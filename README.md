@@ -35,6 +35,11 @@ and a Windows-friendly embedded runtime.
 - **Guardrails**: Policy enforcement for data contracts (schema, bounds, freshness).
 - **Extensible SDK**: Python SDK extensions for datasets, signals, and pipelines.
 
+## Phase 3: Research & Experimentation
+- **Expression Experiments**: Sandbox for testing signals and strategies using the expression engine (MEAN, SUM, etc.).
+- **Macro Definitions**: Save successful experiments as reusable `OpMacroDef` resources for use in production pipelines.
+- **Vintage Data Support**: Full Point-in-Time (PIT) correctness with `EconomicsAccessor` for revision-aware macroeconomic data.
+
 ## Tech Stack
 - Python 3.11+
 - FastAPI (ASGI)

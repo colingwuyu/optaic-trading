@@ -34,3 +34,30 @@ OptAIC requires a strictly auditable trail for all resource mutations and critic
 
 *   **Test**: Verify that your service method calls the emitter.
 *   **Check**: Ensure the `action` string follows the usage pattern `noun.verb`.
+
+## 5. Standard Activity Actions (Quant Domain)
+
+### Signal Operations
+- `signal.registered` - Signal spec created from dataset
+- `signal.validated` - Signal data validated against spec
+- `signal.promoted` - Signal promoted to official
+
+### Dataset Operations
+- `dataset.previewed` - Dataset data previewed
+- `dataset.refresh_started` - Dataset refresh began
+- `dataset.refresh_completed` - Dataset refresh succeeded
+- `dataset.refresh_failed` - Dataset refresh failed
+
+### Pipeline Operations
+- `pipeline_def.submitted` - Pipeline definition created
+- `pipeline_def.deployed` - Pipeline definition deployed
+- `pipeline_instance.created` - Pipeline instance created
+- `pipeline.run_started` - Pipeline run started
+
+### Experiment Operations
+- `experiment.created` - Experiment created
+- `experiment.updated` - Experiment updated
+- `experiment.run_completed` - Experiment run succeeded
+- `experiment.run_failed` - Experiment run failed
+- `expression.evaluated` - Expression evaluated
+- `macro.saved` - Experiment saved as macro

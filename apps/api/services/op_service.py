@@ -147,12 +147,14 @@ class OpService:
             Evaluation result with data and metadata
         """
 
-        # Validate expression
-        validation = self.expression_engine.validate(expression)
-        if validation.get("errors"):
+        # Extract expression metadata (actual validation happens during evaluate)
+        try:
+            datasets_used = self.expression_engine.validate_expression(expression)
+            operators_used = self.expression_engine.get_used_operators(expression)
+        except Exception as e:
             return {
                 "success": False,
-                "errors": validation["errors"],
+                "errors": [f"Invalid expression syntax: {e}"],
             }
 
         # Evaluate
@@ -174,15 +176,15 @@ class OpService:
                 action="expression.evaluated",
                 payload={
                     "expression": expression,
-                    "datasets_used": validation.get("datasets", []),
-                    "operators_used": validation.get("operators", []),
+                    "datasets_used": datasets_used,
+                    "operators_used": operators_used,
                 },
             )
             await record_activity_with_outbox(session, envelope)
             await session.commit()
 
         # Convert result to response
-        return self._result_to_response(result, expression, validation)
+        return self._result_to_response(result, expression, datasets_used, operators_used)
 
     async def list_macros(
         self,
@@ -231,14 +233,16 @@ class OpService:
         self,
         result: Any,
         expression: str,
-        validation: dict[str, Any],
+        datasets_used: list[str],
+        operators_used: list[str],
     ) -> dict[str, Any]:
         """Convert evaluation result to API response.
 
         Args:
             result: Evaluation result (DataFrame, Series, or scalar)
             expression: Original expression
-            validation: Validation info
+            datasets_used: List of dataset references in expression
+            operators_used: List of operators used in expression
 
         Returns:
             Response dict
@@ -266,8 +270,8 @@ class OpService:
                 "data": records,
                 "row_count": len(result),
                 "truncated": len(result) > 1000,
-                "datasets_used": validation.get("datasets", []),
-                "operators_used": validation.get("operators", []),
+                "datasets_used": datasets_used,
+                "operators_used": operators_used,
             }
 
         elif isinstance(result, pd.Series):
@@ -292,8 +296,8 @@ class OpService:
                 "data": records,
                 "row_count": len(result),
                 "truncated": len(result) > 1000,
-                "datasets_used": validation.get("datasets", []),
-                "operators_used": validation.get("operators", []),
+                "datasets_used": datasets_used,
+                "operators_used": operators_used,
             }
 
         else:
@@ -303,6 +307,6 @@ class OpService:
                 "expression": expression,
                 "result_type": "scalar",
                 "value": result,
-                "datasets_used": validation.get("datasets", []),
-                "operators_used": validation.get("operators", []),
+                "datasets_used": datasets_used,
+                "operators_used": operators_used,
             }
