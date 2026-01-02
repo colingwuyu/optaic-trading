@@ -1,9 +1,16 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 from uuid import UUID
 
 import httpx
+
+if TYPE_CHECKING:
+    from .datasets import DatasetsClient
+    from .experiments import ExperimentsClient
+    from .ops import OpsClient
+    from .pipelines import PipelinesClient
+    from .signals import SignalsClient
 
 def _to_str(value: Optional[str | UUID]) -> Optional[str]:
     if value is None:
@@ -28,6 +35,7 @@ class AsyncPlatformClient:
         self._client = client or httpx.AsyncClient(
             base_url=self._base_url, timeout=timeout
         )
+        # Core platform clients
         self.health = HealthClient(self)
         self.tenants = TenantsClient(self)
         self.principals = PrincipalsClient(self)
@@ -38,6 +46,13 @@ class AsyncPlatformClient:
         self.rbac = RbacClient(self)
         self.activities = ActivitiesClient(self)
         self.chat = ChatClient(self)
+
+        # Quant domain clients (lazy-loaded)
+        self._ops: "OpsClient | None" = None
+        self._datasets: "DatasetsClient | None" = None
+        self._signals: "SignalsClient | None" = None
+        self._pipelines: "PipelinesClient | None" = None
+        self._experiments: "ExperimentsClient | None" = None
 
     async def __aenter__(self) -> "AsyncPlatformClient":
         return self
@@ -93,6 +108,54 @@ class AsyncPlatformClient:
         if response.status_code == 204:
             return None
         return response.json()
+
+    # --- Quant Domain Clients (lazy-loaded) ---
+
+    @property
+    def ops(self) -> "OpsClient":
+        """Operators client for expression evaluation."""
+        if self._ops is None:
+            from .ops import OpsClient
+
+            self._ops = OpsClient(self)
+        return self._ops
+
+    @property
+    def datasets(self) -> "DatasetsClient":
+        """Datasets client for data preview and refresh."""
+        if self._datasets is None:
+            from .datasets import DatasetsClient
+
+            self._datasets = DatasetsClient(self)
+        return self._datasets
+
+    @property
+    def signals(self) -> "SignalsClient":
+        """Signals client for signal registration and promotion."""
+        if self._signals is None:
+            from .signals import SignalsClient
+
+            self._signals = SignalsClient(self)
+        return self._signals
+
+    @property
+    def pipelines(self) -> "PipelinesClient":
+        """Pipelines client for definition and instance management."""
+        if self._pipelines is None:
+            from .pipelines import PipelinesClient
+
+            self._pipelines = PipelinesClient(self)
+        return self._pipelines
+
+    @property
+    def experiments(self) -> "ExperimentsClient":
+        """Experiments client for expression experiments and macros."""
+        if self._experiments is None:
+            from .experiments import ExperimentsClient
+
+            self._experiments = ExperimentsClient(self)
+        return self._experiments
+
 
 class HealthClient:
     def __init__(self, client: AsyncPlatformClient) -> None:
