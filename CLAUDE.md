@@ -21,7 +21,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - Using Docker for testing (use SQLite fixtures)
 - Rebuilding Artifactory scripts (already complete in `infra/artifactory/`)
-- Adding Docker dependencies to production code
+- Adding Docker dependencies to production code (use native Windows embedded deployment model)
 - Manual database migrations (auto-run on `optaic server`)
 
 ## Unit Test Requirements Policy

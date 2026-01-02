@@ -14,7 +14,8 @@
       "Bash(uv run mypy:*)",
       "Bash(uv pip install:*)",
       "Bash(dir \"C:\\\\Users\\\\colin\\\\source\\\\repos\\\\optaic-v0\\\\dev_tools\\\\src\\\\function\\\\library\")",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(find:*)"
     ]
   }
 }
