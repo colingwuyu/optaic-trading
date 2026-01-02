@@ -181,6 +181,38 @@ Query parameters:
 
 ## Datasets API
 
+### Create Dataset
+
+```http
+POST /datasets
+```
+
+Request body:
+```json
+{
+  "name": "SPX OHLCV",
+  "parent_id": "9b7e2b44-...",
+  "pipeline_instance_id": "9b7e2b44-...",
+  "store_instance_id": "9b7e2b44-...",
+  "accessor_instance_id": "9b7e2b44-...",
+  "freshness_status": "unknown"
+}
+```
+
+Response:
+```json
+{
+  "id": "a1b2c3d4-...",
+  "name": "SPX OHLCV",
+  "type": "DatasetInstance",
+  "status": "active",
+  "freshness_status": "unknown",
+  "pipeline_instance_id": "9b7e2b44-...",
+  "store_instance_id": "9b7e2b44-...",
+  "accessor_instance_id": "9b7e2b44-..."
+}
+```
+
 ### Get Dataset
 
 ```http
@@ -446,6 +478,7 @@ All mutations emit activity events for audit trails:
 | `pipeline_def.deployed` | Pipeline definition deployed |
 | `pipeline_instance.created` | Pipeline instance created |
 | `pipeline.run_started` | Pipeline run triggered |
+| `dataset.created` | Dataset instance created |
 | `dataset.previewed` | Dataset data previewed |
 | `dataset.refresh_started` | Dataset refresh triggered |
 | `signal.registered` | Signal registered from dataset |

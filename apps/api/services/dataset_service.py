@@ -235,6 +235,106 @@ class DatasetService:
             "pipeline": pipeline_def.code_ref,
         }
 
+    async def create_dataset(
+        self,
+        session: AsyncSession,
+        actor: ActorContext,
+        *,
+        name: str,
+        parent_id: UUID,
+        pipeline_instance_id: UUID,
+        store_instance_id: UUID,
+        accessor_instance_id: UUID,
+        freshness_status: str = "unknown",
+    ) -> dict[str, Any]:
+        """Create a new dataset instance.
+
+        A DatasetInstance is a high-level resource that combines:
+        - A PipelineInstance (data source/transformation)
+        - A StoreInstance (where data is stored)
+        - An AccessorInstance (how data is retrieved)
+
+        Args:
+            session: Database session
+            actor: Actor context for RBAC
+            name: Dataset name
+            parent_id: Parent resource ID (typically a Project)
+            pipeline_instance_id: Reference to pipeline instance
+            store_instance_id: Reference to store instance
+            accessor_instance_id: Reference to accessor instance
+            freshness_status: Initial freshness status
+
+        Returns:
+            Created dataset info
+        """
+        from uuid import uuid4
+
+        # Verify component instances exist and belong to tenant
+        pipeline_inst = await session.get(PipelineInstance, pipeline_instance_id)
+        if not pipeline_inst or pipeline_inst.tenant_id != actor.tenant_id:
+            raise ValueError(f"PipelineInstance {pipeline_instance_id} not found")
+
+        store_inst = await session.get(StoreInstance, store_instance_id)
+        if not store_inst or store_inst.tenant_id != actor.tenant_id:
+            raise ValueError(f"StoreInstance {store_instance_id} not found")
+
+        accessor_inst = await session.get(AccessorInstance, accessor_instance_id)
+        if not accessor_inst or accessor_inst.tenant_id != actor.tenant_id:
+            raise ValueError(f"AccessorInstance {accessor_instance_id} not found")
+
+        # Create Resource
+        resource_id = uuid4()
+        resource = Resource(
+            id=resource_id,
+            tenant_id=actor.tenant_id,
+            type="DatasetInstance",
+            parent_id=parent_id,
+            name=name,
+            status="active",
+            created_by=actor.id,
+        )
+        session.add(resource)
+
+        # Create DatasetInstance extension
+        instance = DatasetInstance(
+            resource_id=resource_id,
+            tenant_id=actor.tenant_id,
+            pipeline_instance_id=pipeline_instance_id,
+            store_instance_id=store_instance_id,
+            accessor_instance_id=accessor_instance_id,
+            freshness_status=freshness_status,
+            row_count=0,
+        )
+        session.add(instance)
+
+        # Emit activity
+        envelope = ActivityEnvelope(
+            tenant_id=actor.tenant_id,
+            actor_principal_id=actor.id,
+            resource_id=resource_id,
+            resource_type="DatasetInstance",
+            action="dataset.created",
+            payload={
+                "name": name,
+                "pipeline_instance_id": str(pipeline_instance_id),
+                "store_instance_id": str(store_instance_id),
+                "accessor_instance_id": str(accessor_instance_id),
+            },
+        )
+        await record_activity_with_outbox(session, envelope)
+        await session.commit()
+
+        return {
+            "id": str(resource_id),
+            "name": name,
+            "type": "DatasetInstance",
+            "status": "active",
+            "freshness_status": freshness_status,
+            "pipeline_instance_id": str(pipeline_instance_id),
+            "store_instance_id": str(store_instance_id),
+            "accessor_instance_id": str(accessor_instance_id),
+        }
+
     async def list_datasets(
         self,
         session: AsyncSession,

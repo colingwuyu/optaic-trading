@@ -514,8 +514,37 @@ class DatasetRefreshOut(BaseModel):
     message: str
 
 
+class DatasetCreate(BaseModel):
+    """Create dataset request."""
+
+    name: str = Field(examples=["SPX OHLCV"])
+    parent_id: UUID = Field(examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"])
+    pipeline_instance_id: UUID = Field(
+        examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"]
+    )
+    store_instance_id: UUID = Field(examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"])
+    accessor_instance_id: UUID = Field(
+        examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"]
+    )
+    freshness_status: str = Field(default="unknown", examples=["unknown", "fresh"])
+
+
+class DatasetOut(BaseModel):
+    """Dataset response."""
+
+    id: UUID
+    name: str
+    type: str = "DatasetInstance"
+    status: str = "active"
+    freshness_status: str
+    pipeline_instance_id: UUID
+    store_instance_id: UUID
+    accessor_instance_id: UUID
+
+
 class DatasetStatusOut(BaseModel):
     """Dataset status response."""
+
     id: UUID
     name: str
     freshness_status: str

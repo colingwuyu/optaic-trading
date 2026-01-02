@@ -18,6 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.api.deps import get_actor, get_db
 from apps.api.rbac_utils import authorize_or_403, get_resource_or_404
 from apps.api.schemas import (
+    DatasetCreate,
+    DatasetOut,
     DatasetPreviewOut,
     DatasetPreviewRequest,
     DatasetRefreshOut,
@@ -27,6 +29,58 @@ from apps.api.services import DatasetService
 from libs.core.rbac.models import ActorContext, Permission
 
 router = APIRouter(prefix="/datasets", tags=["Datasets"])
+
+
+@router.post("", response_model=DatasetOut, status_code=201)
+async def create_dataset(
+    payload: DatasetCreate = Body(...),
+    actor: ActorContext = Depends(get_actor),
+    db: AsyncSession = Depends(get_db),
+) -> DatasetOut:
+    """Create a new dataset instance.
+
+    A DatasetInstance combines:
+    - A PipelineInstance (data source/transformation)
+    - A StoreInstance (where data is stored)
+    - An AccessorInstance (how data is retrieved)
+
+    Args:
+        payload: Dataset creation details
+        actor: Actor context
+        db: Database session
+
+    Returns:
+        Created dataset info
+    """
+    # Check permission on parent resource
+    parent = await get_resource_or_404(db, actor.tenant_id, payload.parent_id)
+    await authorize_or_403(db, actor, Permission.RESOURCE_CREATE_CHILD, parent.id)
+
+    service = DatasetService()
+    try:
+        result = await service.create_dataset(
+            session=db,
+            actor=actor,
+            name=payload.name,
+            parent_id=payload.parent_id,
+            pipeline_instance_id=payload.pipeline_instance_id,
+            store_instance_id=payload.store_instance_id,
+            accessor_instance_id=payload.accessor_instance_id,
+            freshness_status=payload.freshness_status,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return DatasetOut(
+        id=UUID(result["id"]),
+        name=result["name"],
+        type=result["type"],
+        status=result["status"],
+        freshness_status=result["freshness_status"],
+        pipeline_instance_id=UUID(result["pipeline_instance_id"]),
+        store_instance_id=UUID(result["store_instance_id"]),
+        accessor_instance_id=UUID(result["accessor_instance_id"]),
+    )
 
 
 @router.get("/{dataset_id}", response_model=DatasetStatusOut)

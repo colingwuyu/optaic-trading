@@ -46,6 +46,34 @@ and a Windows-friendly embedded runtime.
 - **`/signals`**: Signal registration, validation, promotion workflow
 - **`/experiments`**: Expression experiments, save as macro
 
+### Python SDK (Phase 5)
+Quant domain clients for programmatic access:
+```python
+from libs.sdk_py import AsyncPlatformClient
+
+async with AsyncPlatformClient(
+    base_url="http://localhost:8081/api",
+    principal_id="...", tenant_id="..."
+) as client:
+    # Operators
+    ops = await client.ops.list(category="rolling")
+    result = await client.ops.evaluate("MEAN($close, 20)", {"close": dataset_id})
+
+    # Datasets
+    preview = await client.datasets.preview(dataset_id, as_of_date="2024-06-15")
+    await client.datasets.refresh(dataset_id)
+
+    # Signals
+    signal = await client.signals.register(dataset_id, "momentum_signal", min_value=-1, max_value=1)
+    await client.signals.validate(signal["id"])
+    await client.signals.promote(signal["id"])
+
+    # Experiments
+    exp = await client.experiments.create("Test", "MEAN($x, 20)", parent_id, input_datasets={"x": ds_id})
+    result = await client.experiments.run(exp["id"])
+    await client.experiments.save_as_macro(exp["id"], macro_name="MyMacro")
+```
+
 ### Governance
 - **Guardrails**: Policy enforcement for data contracts (schema, bounds, freshness).
 - **RBAC**: Role-based access control on all resources.
