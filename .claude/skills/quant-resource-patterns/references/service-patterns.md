@@ -1,5 +1,119 @@
 # Service Layer Patterns
 
+## code_ref Linkage Pattern (CRITICAL)
+
+Services bridge the Resource model (governance) to Factory-based execution (domain logic):
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        SERVICE LAYER                                 │
+│                     (apps/api/services/)                            │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+        ┌───────────────────────────┼───────────────────────────┐
+        ▼                           ▼                           ▼
+┌───────────────┐          ┌───────────────┐          ┌───────────────┐
+│ DatasetService │          │ SignalService │          │ OpService     │
+└───────────────┘          └───────────────┘          └───────────────┘
+        │                           │                           │
+        │ 1. Load Resource          │                           │
+        │ 2. Load Extension table   │                           │
+        │ 3. Get Definition.code_ref│                           │
+        │ 4. Factory.build(code_ref)│                           │
+        ▼                           ▼                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                        DB MODELS (Phase 1)                          │
+│                     (libs/db/models/quant.py)                       │
+├─────────────────────────────────────────────────────────────────────┤
+│  PipelineDefinition.code_ref ─┐                                     │
+│  StoreDefinition.code_ref ────┼─► "ExpressionPipeline"              │
+│  AccessorDefinition.code_ref ─┘   "ParquetStore"                    │
+│                                   "PITAccessor"                     │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                        FACTORIES (Phase 2)                          │
+│                     (libs/data/registry.py)                         │
+├─────────────────────────────────────────────────────────────────────┤
+│  PIPELINE_FACTORY["ExpressionPipeline"] → ExpressionPipeline class  │
+│  STORE_FACTORY["ParquetStore"] → ParquetStore class                 │
+│  ACCESSOR_FACTORY["PITAccessor"] → PITAccessor class                │
+│  OPS_REGISTRY["MEAN"] → mean_op function                            │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Two-Table Pattern
+
+Every quant resource uses a two-table pattern:
+1. **Resource table**: Standard governance (RBAC, versioning, activity, hierarchy)
+2. **Extension table**: Domain-specific data (code_ref, config, metrics)
+
+```
+┌─────────────────┐     ┌─────────────────────────┐
+│    resources    │ 1─1 │  pipeline_definitions   │
+├─────────────────┤     ├─────────────────────────┤
+│ id (PK)         │◄────│ resource_id (PK, FK)    │
+│ tenant_id       │     │ tenant_id               │
+│ type            │     │ category                │
+│ parent_id       │     │ code_ref                │ ← Links to Factory
+│ name            │     │ interface_spec          │
+│ metadata_json   │     │ guardrail_contracts     │
+└─────────────────┘     └─────────────────────────┘
+```
+
+### Service Implementation Pattern
+
+```python
+# apps/api/services/dataset_service.py
+from uuid import UUID
+from libs.data.registry import PIPELINE_FACTORY, STORE_FACTORY, ACCESSOR_FACTORY
+from libs.db.models.quant import (
+    DatasetInstance, PipelineInstance, StoreInstance, AccessorInstance,
+    PipelineDefinition, StoreDefinition, AccessorDefinition
+)
+
+class DatasetService:
+    async def preview_dataset(
+        self, session, actor, dataset_id: UUID, *, as_of_date=None
+    ):
+        """Execute a dataset and return data."""
+
+        # 1. Load the DatasetInstance resource + extension
+        instance = await session.get(DatasetInstance, dataset_id)
+
+        # 2. Load component instances (composition pattern)
+        store_inst = await session.get(StoreInstance, instance.store_instance_id)
+        accessor_inst = await session.get(AccessorInstance, instance.accessor_instance_id)
+
+        # 3. Load component definitions (to get code_ref)
+        store_def = await session.get(StoreDefinition, store_inst.definition_resource_id)
+        accessor_def = await session.get(AccessorDefinition, accessor_inst.definition_resource_id)
+
+        # 4. Build execution objects from factories using code_ref
+        store = STORE_FACTORY.build(
+            store_def.code_ref,          # e.g., "ParquetStore"
+            resource_id=str(store_inst.resource_id),
+            config=store_inst.config_json or {},
+            data_dir=self.data_dir,
+        )
+        accessor = ACCESSOR_FACTORY.build(
+            accessor_def.code_ref,       # e.g., "PITAccessor"
+            resource_id=str(accessor_inst.resource_id),
+            config=accessor_inst.config_json or {},
+            store=store,
+        )
+
+        # 5. Execute
+        df = accessor.get(as_of_date=as_of_date)
+
+        # 6. Emit activity
+        envelope = ActivityEnvelope(...)
+        await record_activity_with_outbox(session, envelope)
+
+        return self._dataframe_to_response(df)
+```
+
 ## Standard Service Structure
 
 ```python

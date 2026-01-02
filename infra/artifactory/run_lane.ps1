@@ -1,7 +1,7 @@
 param(
   [ValidateSet("staging", "uat", "prod")]
   [string]$Lane = "staging",
-  [string]$BaseDir = "D:\optaic-artifactory",
+  [string]$BaseDir = "C:\optaic-artifactory",
   [int]$Port = 0,
   [string]$Bind = "0.0.0.0",
   [string]$PackagesDir = "",
@@ -41,28 +41,16 @@ New-Item -ItemType Directory -Force -Path $LogsDir | Out-Null
 
 function Get-PythonCommand {
   $candidates = @(
-    @{ Cmd = "py"; Args = @("-3.12") },
-    @{ Cmd = "py"; Args = @("-3.11") },
-    @{ Cmd = "py"; Args = @("-3.10") },
+    @{ Cmd = "C:\Users\colin\source\repos\optaic-trading\venv312\Scripts\python.exe"; Args = @() },
+    @{ Cmd = "C:\Users\colin\source\repos\optaic-trading\.venv\Scripts\python.exe"; Args = @() },
     @{ Cmd = "python"; Args = @() },
     @{ Cmd = "py"; Args = @() }
   )
   foreach ($candidate in $candidates) {
     if (-not (Get-Command $candidate.Cmd -ErrorAction SilentlyContinue)) { continue }
-    try {
-      $ver = & $candidate.Cmd @($candidate.Args + @("-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"))
-    } catch {
-      continue
-    }
-    if (-not $ver) { continue }
-    $parts = $ver.Trim().Split(".")
-    if ($parts.Length -lt 2) { continue }
-    $major = [int]$parts[0]
-    $minor = [int]$parts[1]
-    if ($major -gt 3 -or ($major -eq 3 -and $minor -ge 13)) { continue }
     return $candidate
   }
-  throw "Python 3.12 or lower is required for pypiserver (Python 3.13 removed 'cgi')."
+  throw "Python is required."
 }
 
 $args = @(

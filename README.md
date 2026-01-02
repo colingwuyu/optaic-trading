@@ -27,6 +27,14 @@ and a Windows-friendly embedded runtime.
 - Supports Windows-first, Docker-optional deployment with automatic DB migrations.
 - Enables lane-based promotion (staging → UAT → prod) via internal artifactory.
 
+## Quant Domain Features (Phase 2)
+- **Data Pipelines**: Flexible ETL pipelines (FRED, Bloomberg, Expression) integrated with governance.
+- **Dataset Management**: Versioned datasets with PIT (Point-in-Time) access and lineage tracking.
+- **Signal Engine**: Promote datasets to signals with validation contracts and audit trails.
+- **Operator Library**: Built-in library of time-series (REF, DELTA), statistical (MEAN, STD), and math operators.
+- **Guardrails**: Policy enforcement for data contracts (schema, bounds, freshness).
+- **Extensible SDK**: Python SDK extensions for datasets, signals, and pipelines.
+
 ## Tech Stack
 - Python 3.11+
 - FastAPI (ASGI)

@@ -103,3 +103,34 @@ class DatasetInstance:
     pipeline_def_id: UUID
     pipeline_def_version: int  # Pinned version
 ```
+
+## 10. code_ref Linkage (CRITICAL)
+
+Services bridge DB models to Factory-based execution via `code_ref`:
+
+```
+Definition.code_ref → FACTORY.build(code_ref) → Execution Object
+```
+
+**Pattern**:
+1. Load Instance from DB
+2. Load related Definition(s)
+3. Get `code_ref` from Definition extension table
+4. Call `FACTORY.build(code_ref, config)` to get execution object
+5. Execute domain logic
+
+```python
+# Example: DatasetService.preview_dataset()
+store_def = await session.get(StoreDefinition, store_inst.definition_resource_id)
+store = STORE_FACTORY.build(
+    store_def.code_ref,  # "ParquetStore" → ParquetStore class
+    config=store_inst.config_json,
+)
+```
+
+## 11. Seeding Built-in Definitions
+
+System-provided definitions must be seeded at startup:
+- Location: `scripts/seed_definitions.py`
+- Contains: BUILT_IN_PIPELINES, BUILT_IN_STORES, BUILT_IN_ACCESSORS, BUILT_IN_OPS
+- Each entry has `code_ref` matching factory registration keys

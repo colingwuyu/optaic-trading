@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
-from sqlalchemy import String, DateTime, ForeignKey, Index, UniqueConstraint, nullsfirst
+from sqlalchemy import String, DateTime, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from ..base import Base
 from ..types import JSONType
@@ -14,7 +14,7 @@ class Activity(Base):
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
     actor_principal_id: Mapped[UUID] = mapped_column(ForeignKey("principals.id"))
-    resource_id: Mapped[UUID] = mapped_column(ForeignKey("resources.id"))
+    resource_id: Mapped[UUID] = mapped_column(index=True)
     resource_type: Mapped[str] = mapped_column(String(100))
     action: Mapped[str] = mapped_column(String(100))
     target_principal_id: Mapped[UUID | None] = mapped_column(ForeignKey("principals.id"), nullable=True)
@@ -59,9 +59,10 @@ class Outbox(Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
+        # Index for processing unpublished items: query with WHERE published_at IS NULL ORDER BY created_at
         Index(
             "ix_outbox_publishable",
-            nullsfirst(published_at),
+            "published_at",
             "created_at",
         ),
     )

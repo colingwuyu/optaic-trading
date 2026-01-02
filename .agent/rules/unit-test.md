@@ -1,17 +1,33 @@
----
+﻿---
 trigger: always_on
 ---
 
-# Unit Test Requirements Policy
+# Definition of Done & Quality Policy
 
-## All Tasks Must Pass Unit Tests
+## 1. Unit Tests (Strict)
 The agent must ensure that all code implementations and resulting tasks, excluding pure documentation updates, have passing unit tests before reporting completion to the user.
 
-- **Pre-report verification:** Always run the project's test suite as a final step.
-- **Do not proceed if tests fail:** If tests fail, the agent must troubleshoot and fix the failures before considering the task complete.
+- **Pre-report verification:** Always run 'uv run pytest'.
+- **Zero Warnings:** Tests must execute without warnings (deprecation, linting, etc).
+- **Environment:** Use SQLite (in-memory/tempfile) with 'poolclass=NullPool'.
+- **Configuration:** 'conftest.py' must use session-scoped engine fixtures and function-scoped rollbacks.
+- **Fail Check:** Do not proceed if tests fail. Troubleshoot and fix immediately.
 
-## Zero Warnings Policy
-All tests must not only pass, but also execute without any warnings (e.g., deprecation warnings, linting warnings, compiler warnings).
+## 2. Documentation Updates (Mandatory)
+Every task involving code changes MUST include a review and update of relevant documentation.
 
-- **Warning Resolution:** If any warnings occur during the test run or compilation, the agent is responsible for resolving them as if they were errors.
-- **Clean Output:** The final report to the user must confirm that the test output is entirely clean of warnings and errors.
+**Target Audiences:**
+1. **DevOps**: Update 'infra/' docs, deployment guides, or artifactory instructions if infrastructure changes.
+2. **System Developer**: Update 'docs/arch', 'README.md', or code comments if logic/patterns change.
+3. **Frontend Developer**: Update component docs or API usage guides if UI/API changes.
+4. **Quant/Data Team**: Update SDK docs ('libs/sdk_py'), Jupyter examples, or Model definitions if domain logic changes.
+
+**Rule:**
+- If you change how it works, you must change how it is documented.
+- Check 'README.md' and 'docs/' hierarchy for stale information.
+
+## 3. Technical Requirements (Testing)
+- **Runner**: 'uv run pytest'
+- **Database**: SQLite only (no Docker).
+- **Asyncio**: Use session-scoped event loops and engine fixtures to avoid 'pytest-asyncio' scope errors.
+- **Pragmas**: 'foreign_keys=OFF' for audit log resilience in tests.

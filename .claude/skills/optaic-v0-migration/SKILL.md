@@ -26,7 +26,27 @@ audit_operation()           →    ActivityEnvelope + tx_activity()
 get_dataset_info(name)      →    get_resource_or_404(db, tenant_id, uuid)
 DataAPI.preview()           →    DatasetService.preview() + RBAC
 ExpressionPipeline.run()    →    ExperimentService.run() + Activity
+PIPELINE_FACTORY["key"]     →    Definition.code_ref → FACTORY.build(code_ref)
 ```
+
+## code_ref Linkage (CRITICAL)
+
+The key integration pattern between DB models and libs/data/ factories:
+
+1. **Definition resources** store `code_ref` field (e.g., "ParquetStore")
+2. **Services** load Definition → get `code_ref` → call `FACTORY.build(code_ref)`
+3. **Factories** (PIPELINE_FACTORY, STORE_FACTORY, ACCESSOR_FACTORY) return execution objects
+
+```python
+# Service bridges Resource model to Factory execution
+store_def = await session.get(StoreDefinition, store_inst.definition_resource_id)
+store = STORE_FACTORY.build(
+    store_def.code_ref,  # "ParquetStore" → ParquetStore class
+    config=store_inst.config_json,
+)
+```
+
+See `quant-resource-patterns/references/service-patterns.md` for full pattern.
 
 ## Core Pattern Mappings
 

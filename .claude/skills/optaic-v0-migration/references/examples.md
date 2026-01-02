@@ -190,6 +190,77 @@ async def submit_pipeline_definition(
     return ResourceOut.model_validate(resource)
 ```
 
+## Example 4: code_ref Linkage (DatasetInstance Execution)
+
+The key integration pattern bridging DB models to Factory execution:
+
+### Before (optaic-v0)
+```python
+# Direct factory lookup by name
+info = DATA_CATALOG.get(dataset_name)
+pipeline = PIPELINE_FACTORY[info.source_type]
+store = STORE_FACTORY[info.backend_type](info.physical_path)
+accessor = ACCESSOR_FACTORY[info.accessor_type](store, info)
+data = accessor.read(start_date, end_date)
+```
+
+### After (optaic-trading)
+```python
+class DatasetService:
+    async def preview_dataset(self, session, actor, dataset_id: UUID, *, as_of_date=None):
+        # 1. Load DatasetInstance resource + extension
+        instance = await session.get(DatasetInstance, dataset_id)
+        if not instance or instance.tenant_id != actor.tenant_id:
+            raise ValueError(f"DatasetInstance {dataset_id} not found")
+
+        # 2. Load component instances (composition pattern)
+        store_inst = await session.get(StoreInstance, instance.store_instance_id)
+        accessor_inst = await session.get(AccessorInstance, instance.accessor_instance_id)
+
+        # 3. Load component definitions (to get code_ref)
+        store_def = await session.get(StoreDefinition, store_inst.definition_resource_id)
+        accessor_def = await session.get(AccessorDefinition, accessor_inst.definition_resource_id)
+
+        # 4. Build execution objects from factories using code_ref
+        store = STORE_FACTORY.build(
+            store_def.code_ref,          # "ParquetStore" → ParquetStore class
+            resource_id=str(store_inst.resource_id),
+            config=store_inst.config_json or {},
+            data_dir=self.data_dir,
+        )
+        accessor = ACCESSOR_FACTORY.build(
+            accessor_def.code_ref,       # "PITAccessor" → PITAccessor class
+            resource_id=str(accessor_inst.resource_id),
+            config=accessor_inst.config_json or {},
+            store=store,
+        )
+
+        # 5. Execute
+        df = accessor.get(as_of_date=as_of_date)
+
+        # 6. Emit activity
+        envelope = ActivityEnvelope(
+            tenant_id=actor.tenant_id,
+            actor_principal_id=actor.id,
+            resource_id=dataset_id,
+            resource_type="DatasetInstance",
+            action="dataset.previewed",
+            payload={"as_of_date": str(as_of_date) if as_of_date else None},
+        )
+        await record_activity_with_outbox(session, envelope)
+
+        # 7. Return response (convert DataFrame to dict)
+        return self._dataframe_to_response(df, instance)
+```
+
+### Key Insight: Two-Table Pattern
+
+Every quant resource uses:
+1. **Resource table**: governance (RBAC, versioning, activity, hierarchy)
+2. **Extension table**: domain data (code_ref, config, metrics)
+
+The `code_ref` field in Definition extension tables links to factory registration keys.
+
 ## Key Transformation Patterns
 
 | Pattern | optaic-v0 | optaic-trading |
@@ -201,3 +272,4 @@ async def submit_pipeline_definition(
 | Return | `pd.DataFrame` | Pydantic DTO |
 | Mutation | Direct dict update | `tx_activity()` wrapper |
 | Error | `raise Exception` | `raise HTTPException(status_code=...)` |
+| Factory | `FACTORY[name]` | `Def.code_ref` → `FACTORY.build(code_ref)` |

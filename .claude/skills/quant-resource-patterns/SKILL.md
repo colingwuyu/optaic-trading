@@ -112,6 +112,19 @@ Location: `libs/core/tests/test_<domain>.py`
 2. **Activity emission** - All mutations emit activities in service layer
 3. **Guardrails hooks** - Validate at lifecycle gates (create/update/promote)
 4. **Version tracking** - Instances reference definition versions
+5. **code_ref linkage** - Services bridge DB models to factories via `Definition.code_ref`
+
+## code_ref Integration (CRITICAL)
+
+The `code_ref` field in Definition extension tables links to factory registration keys:
+
+```
+Definition.code_ref → FACTORY.build(code_ref) → Execution Object
+```
+
+**Pattern**: Service loads Instance → loads Definition → gets `code_ref` → builds from Factory
+
+See [Service Patterns](references/service-patterns.md) for implementation details.
 
 ## Reference Files
 

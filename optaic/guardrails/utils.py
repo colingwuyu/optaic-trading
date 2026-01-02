@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
-
+from typing import Any, TYPE_CHECKING
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from optaic.guardrails.contracts.base import ContractRef
 
 
 def canonical_dumps(obj: Any) -> str:

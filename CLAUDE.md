@@ -2,6 +2,28 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## CRITICAL: Native Windows Deployment Model
+
+**OptAIC is deployed as a native Windows application via Python wheel.** There is NO Docker in production.
+
+| Aspect | Implementation |
+|--------|---------------|
+| **Packaging** | Single Python wheel with extras (`pip install optaic[server]`) |
+| **Distribution** | Local Artifactory with lanes: staging → uat → prod |
+| **Deployment** | `pip install` + `optaic server` on Windows Server |
+| **Testing** | SQLite fixtures, no containers required |
+| **Database** | SQLite (embedded) or PostgreSQL (external) |
+| **Binaries** | Centrifugo/Redis auto-downloaded by CLI |
+
+**Read the `devops-deployment` skill for complete DevOps patterns.**
+
+### Anti-Patterns (DO NOT DO)
+
+- Using Docker for testing (use SQLite fixtures)
+- Rebuilding Artifactory scripts (already complete in `infra/artifactory/`)
+- Adding Docker dependencies to production code
+- Manual database migrations (auto-run on `optaic server`)
+
 ## Unit Test Requirements Policy
 
 ### All Tasks Must Pass Unit Tests

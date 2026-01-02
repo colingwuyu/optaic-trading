@@ -46,8 +46,7 @@ class JsonSchemaValidator(ContractValidator):
             List of validation issues.
         """
         try:
-            import jsonschema
-            from jsonschema import Draft7Validator, ValidationError
+            from jsonschema import Draft7Validator
         except ImportError:
             return [
                 ValidationIssue(

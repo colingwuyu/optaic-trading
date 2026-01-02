@@ -5,82 +5,54 @@ description: Agent trigger: Load this file when extending the OptAIC Python SDK 
 
 # SDK Extension Rules
 
-This document governs SDK extension development for `libs/sdk_py/optaic/`.
+Guide for extending the OptAIC Python SDK with new resource operations.
 
 ## 1. Client Architecture
 
-Use mixin-based composition for resource clients:
+Location: `libs/sdk_py/optaic/`
+- `client.py` - Composite sync/async clients
+- `exceptions.py` - Custom exceptions
+- `resources/` - Resource-specific operations
 
-```python
-class OptAICClient(SignalsMixin, DatasetsMixin, RunsMixin):
-    def __init__(self, base_url: str, api_key: str):
-        self._client = httpx.Client(base_url=base_url, ...)
-```
+## 2. Key Patterns
 
-Location: `libs/sdk_py/optaic/resources/`
+### Mixin-Based Composition
+Each resource type is a mixin class. Composite client inherits all mixins.
 
-## 2. Dataclass Models
+### Dataclass Models
+SDK models are simple dataclasses with `from_dict` factory method.
 
-SDK models use dataclasses with `from_dict` factory:
-
-```python
-@dataclass
-class Signal:
-    id: UUID
-    name: str
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "Signal":
-        return cls(id=UUID(data["id"]), name=data["name"])
-```
-
-## 3. Definition vs Instance Operations
-
-- **Definitions**: Read-only (list, get, get_version)
+### Definition vs Instance Operations
+- **Definitions**: Mostly read-only (list, get, get_version)
 - **Instances**: Full CRUD + run submission
 
-## 4. Long-Running Operations
+## 3. Long-Running Operations
 
-Runs and backtests need polling helpers:
+Runs and backtests need polling helpers with timeout and status callbacks.
 
-```python
-def run_and_wait(
-    self,
-    instance_id: UUID,
-    timeout: float = 3600,
-    on_status: Optional[Callable] = None
-) -> Run:
-    run = self.submit_run(instance_id)
-    while run.status not in ("completed", "failed"):
-        run = self.get_run(run.id)
-        if on_status:
-            on_status(run)
-        time.sleep(5.0)
-    return run
-```
+## 4. Lazy Import Rule
 
-## 5. Exception Hierarchy
-
-```python
-class OptAICError(Exception): pass
-class AuthenticationError(OptAICError): pass
-class AuthorizationError(OptAICError): pass
-class NotFoundError(OptAICError): pass
-class ValidationError(OptAICError): pass
-class GuardrailsBlockedError(OptAICError):
-    def __init__(self, message, report):
-        self.report = report
-```
-
-## 6. Lazy Import Rule
-
-Heavy deps in method bodies only:
-
-```python
+Heavy deps (pandas, numpy, pyarrow) must be lazy-loaded in method bodies:
+`python
 def upload_dataframe(self, dataset_id, df):
     try:
         import pandas as pd
         import pyarrow as pa
     except ImportError:
         raise ImportError("pip install optaic[data]")
-```
+`
+
+## 5. Exception Hierarchy
+
+- `OptAICError` (base)
+- `AuthenticationError`, `AuthorizationError`
+- `NotFoundError`, `ValidationError`
+- `GuardrailsBlockedError` (includes ValidationReport)
+
+## 6. References
+
+See `.claude/skills/sdk-patterns/` for complete patterns:
+- `SKILL.md` - Full SDK architecture
+- `references/client-patterns.md` - Architecture, mixins, exceptions
+- `references/resource-operations.md` - CRUD, versions, runs
+- `references/async-patterns.md` - Long-running ops, uploads, streaming
