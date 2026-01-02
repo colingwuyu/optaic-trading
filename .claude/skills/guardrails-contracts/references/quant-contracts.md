@@ -33,6 +33,31 @@
 | `model.performance` | Min Sharpe/accuracy | Block in official |
 | `model.stability` | Parameter stability | Warn in staging |
 | `model.freshness` | Retrain schedule | Warn then escalate |
+| `model.drift` | Feature/prediction drift | Warn then escalate |
+
+## Backtest Contracts
+
+| Contract | Purpose | Enforcement |
+|----------|---------|-------------|
+| `backtest.lookahead` | No future data leakage | Block always |
+| `backtest.data_quality` | Clean input data | Block in official |
+| `backtest.date_coverage` | Sufficient history | Warn in staging |
+
+## Optimizer Contracts
+
+| Contract | Purpose | Enforcement |
+|----------|---------|-------------|
+| `optimizer.convergence` | Solver converged | Block always |
+| `optimizer.constraints` | All constraints met | Block always |
+| `optimizer.stability` | Solution stability | Warn in staging |
+
+## Monitoring Contracts
+
+| Contract | Purpose | Enforcement |
+|----------|---------|-------------|
+| `monitoring.data_drift` | Input drift detection | Alert then escalate |
+| `monitoring.performance_decay` | Model performance decay | Alert then escalate |
+| `monitoring.data_quality` | Missing/outlier rates | Alert then escalate |
 
 ## Common Validation Patterns
 

@@ -97,13 +97,16 @@ To keep the platform coherent, enforce three tiers:
 
 Reusable, versioned, testable building blocks:
 
-- `PipelineDef` — ETL, Expression pipeline, Training pipeline, Inference pipeline, Monitoring pipeline
-- `StoreDef` — Parquet vintage store, partition strategies, virtual cache store
-- `AccessorDef` — PIT accessor, snapshot accessor, latest accessor, API accessor
-- `OpDef` — primitive ops
-- `OpMacroDef` — saved DSL expression as op macro
-- `MLModuleDef` — model module (trainer, inference wrapper, metrics evaluator)
-- `HookDef` — pre/post hooks for policy, QA gates, notifications
+| Definition Type | Purpose | Examples |
+|----------------|---------|----------|
+| `PipelineDef` | ETL, Expression, Training, Inference, Monitoring pipelines | `BloombergPipeline`, `FredPipeline`, `ExpressionPipeline` |
+| `StoreDef` | Data persistence strategy | `ParquetStore`, `VirtualCacheStore`, `SQLiteStore` |
+| `AccessorDef` | Data retrieval interface | `PITAccessor`, `SnapshotAccessor`, `FieldAccessor` |
+| `OpDef` | Primitive operations | `MA`, `Zscore`, `Lag`, `REF`, `DELTA` |
+| `OpMacroDef` | Saved DSL expression as reusable op | `MACrossover`, `MomentumScore` |
+| `MLModuleDef` | ML model module (trainer, inference, monitor) | `XGBTrainer`, `LSTMPredictor` |
+| `PortfolioOptimizerDef` | Portfolio construction algorithm | `MVOOptimizer`, `HRPOptimizer`, `BlackLitterman`, `RiskParity`, `RLOptimizer` |
+| `HookDef` | Pre/post hooks for policy, QA gates, notifications | `SchemaValidator`, `AlertNotifier` |
 
 All definitions:
 - implement required abstract interfaces
@@ -114,14 +117,28 @@ All definitions:
 
 Concrete configurations referencing definitions:
 
-- `DatasetInstance` — composed of:
-  - `PipelineInstance`
-  - `StoreInstance`
-  - `AccessorInstance`
-  - optionally `ExpressionPipelineInstance` embedded in pipeline
-- `TrainingInstance`, `InferenceInstance`, `MonitoringInstance`
-- `SignalSpec` resources (range, clipping, neutral value, sampling/availability)
-- `ExperimentInstance` with tabs/expressions and preview datasets
+| Instance Type | Composed Of | Definition Ref | Notes |
+|--------------|-------------|----------------|-------|
+| `DatasetInstance` | PipelineInstance + StoreInstance + AccessorInstance | Multiple Defs | Core data entity |
+| `SignalInstance` | DatasetInstance + SignalSpec | Inherits from Dataset | Specialized for signals |
+| `ModelInstance` | MLModuleDef + datasets + config | `MLModuleDef` | ML model deployment |
+| `ExperimentInstance` | Expressions + preview datasets | `OpDef`/`OpMacroDef` | Expression experiments |
+| `PortfolioOptimizerInstance` | Constraints + config | `PortfolioOptimizerDef` | Portfolio construction |
+| `BacktestInstance` | Assets + signals + date range + config | None (fixed procedure) | Backtest configuration |
+
+**BacktestInstance** is special — no definition needed because the backtest procedure code is fixed. Only the **configuration** varies:
+- Assets to trade
+- Signals to use (references to SignalInstance resources)
+- Date range (start, end, warmup period)
+- Rebalance frequency
+- Model retrain frequency
+- Transaction costs and constraints
+
+**PortfolioOptimizerInstance** references a `PortfolioOptimizerDef` (MVO, HRP, Black-Litterman, Risk-Parity, RL, etc.) and specifies:
+- Constraints (max_weight, min_weight, leverage, turnover)
+- Risk model configuration
+- Lookback windows
+- Algorithm-specific parameters
 
 Instances are config-as-code on top of defs + versions:
 - `(def_resource_id, def_version_id)` + `config_json`
@@ -130,16 +147,41 @@ Instances are config-as-code on top of defs + versions:
 
 Executions are first-class:
 
-- `Run` (pipeline)
-- `TrainingRun`, `InferenceRun`, `MonitoringRun`
-- outputs:
-  - `DatasetVersion`
-  - `ModelVersion`
-- provenance:
-  - `LineageEdge` linking upstream versions → downstream version
+| Run Type | Parent Instance | Outputs | Notes |
+|----------|----------------|---------|-------|
+| `PipelineRun` | DatasetInstance | DatasetVersion | Dataset refresh |
+| `ExperimentRun` | ExperimentInstance | Preview results | Expression evaluation |
+| `TrainingRun` | ModelInstance | ModelVersion + artifacts | ML training |
+| `InferenceRun` | ModelInstance | Prediction dataset | ML inference |
+| `MonitoringRun` | ModelInstance | Metrics + alerts | Drift detection |
+| `BacktestRun` | BacktestInstance | PnL, Sharpe, trades, equity curve | Backtest execution |
+| `PortfolioOptimizationRun` | PortfolioOptimizerInstance | Weights, optimization metrics | Portfolio construction |
+
+Outputs and provenance:
+- `DatasetVersion` — versioned dataset snapshot
+- `ModelVersion` — versioned model artifact
+- `LineageEdge` — linking upstream versions → downstream version
 
 Invariant:
 > Only Runs create Versions; Versions create Lineage.
+
+**BacktestRun outputs:**
+```
+BacktestRun
+├── metrics_json: {sharpe, sortino, max_drawdown, turnover, calmar}
+├── trades_json: [{date, asset, direction, quantity, price}, ...]
+├── equity_curve_ref: path to equity curve data
+└── lineage: [signal_versions, dataset_versions used]
+```
+
+**PortfolioOptimizationRun outputs:**
+```
+PortfolioOptimizationRun
+├── weights_json: {asset: weight, ...}
+├── optimization_metrics_json: {objective_value, iterations, convergence}
+├── constraints_satisfied: bool
+└── timestamp
+```
 
 ---
 
@@ -214,13 +256,48 @@ Channels are resources with:
 
 OptAIC enforces **guardrails** at all lifecycle gates to ensure configured resources conform to declared contracts before they can be promoted or executed in production.
 
+### 6.0 Architecture: Law vs Police
+
+**Definition Resources = The Law**
+- Definitions contain contracts, schemas, and compatibility rules
+- These define WHAT must be validated
+
+**Guardrails Engine = The Police**
+- Reads contracts FROM Definition Resources
+- Enforces them at gates (instance creation, run execution, data write, promotion)
+- Does NOT define contracts—it enforces them
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│           DEFINITION RESOURCE (The Law)                          │
+│  ├── interface_spec        # Abstract interface                  │
+│  ├── input_schema          # Expected inputs                     │
+│  ├── output_schema         # Expected outputs                    │
+│  ├── compatibility_rules   # What can connect upstream/downstream│
+│  └── guardrail_contracts   # Validation rules                    │
+│      ├── signal.bounds: {min: -1, max: 1}                       │
+│      ├── pit.policy: {knowledge_date_required: true}            │
+│      └── dataset.schema: {columns: [...]}                       │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│           GUARDRAILS ENGINE (The Police)                         │
+│  Reads contracts FROM Definitions, enforces at gates:            │
+│  ├── Gate 1: Instance Creation (validate config + compatibility) │
+│  ├── Gate 2: Run Execution (validate inputs match schema)        │
+│  ├── Gate 3: Data Write (validate outputs in real-time)          │
+│  └── Gate 4: Promotion/Merge (all contracts must pass)           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
 ### 6.1 Core Concepts
 
 | Concept | Description |
 |---------|-------------|
-| **ContractRef** | Identifies a contract kind (e.g., `signal.bounds`, `dataset.schema`) and carries its JSON Schema. |
-| **ContractInstance** | A concrete configuration for a contract kind + a deterministic `contract_hash`. |
-| **ContractBundle** | A set of ContractInstances attached to a resource (the "active bundle"). |
+| **Definition Contracts** | Validation rules embedded in Definition Resources (the "law"). |
+| **Guardrails Engine** | The enforcement system that reads and validates contracts (the "police"). |
+| **Compatibility Rules** | Rules in Definitions specifying valid upstream/downstream resource types. |
 | **ValidationReport** | The output of every guardrail evaluation—stored and emitted as an activity event. |
 
 ### 6.2 Lifecycle Gates
@@ -1066,36 +1143,129 @@ In Dataset Inventory                In Signal Hub (subset view)
 
 ## 16) Backtest Architecture
 
-### 16.1 Backtest as Execution
+### 16.1 Backtest as Resource
 
-A **Backtest** is an execution of portfolio runs. It takes:
-- Signal(s) from Signal Hub
-- Portfolio construction parameters
-- Execution constraints
-- Historical date range
+A **BacktestInstance** is a governed resource containing backtest configuration. Unlike other instances, it does not reference a definition because the backtest procedure is fixed code — only the configuration varies.
+
+```
+BacktestInstance (Resource)
+├── type: "BacktestInstance"
+├── parent_id: Project
+├── config:
+│   ├── assets: ["ES1", "NQ1", "CL1", ...]
+│   ├── signals: [signal_resource_id_1, signal_resource_id_2, ...]
+│   ├── portfolio_optimizer: optimizer_instance_id (optional)
+│   ├── date_range: {start: "2020-01-01", end: "2025-12-31", warmup: 252}
+│   ├── rebalance_frequency: "daily" | "weekly" | "monthly"
+│   ├── model_retrain_frequency: "weekly" | "monthly" | "quarterly"
+│   ├── transaction_costs: {commission: 0.001, slippage: 0.0005}
+│   └── constraints: {max_leverage: 1.5, max_position: 0.3}
+└── Children:
+    └── BacktestRun (execution results)
+```
+
+**Benefits of BacktestInstance as Resource:**
+- **Shareable**: Promote winning backtest configs from personal → team → system
+- **Versionable**: Track configuration changes via ResourceVersion
+- **Auditable**: Activity events for all backtest operations
+- **RBAC**: Control who can view/run/modify backtests
+- **Lineage**: Link to signals, datasets, optimizers used
 
 ### 16.2 Backtest Run Outputs
 
 ```
-BacktestRun
-├── PortfolioWeights (time series)
-├── Returns (realized, attributed)
-├── Metrics
-│   ├── Sharpe ratio
-│   ├── Max drawdown
-│   ├── Turnover
-│   └── Transaction costs
-├── Trades (execution log)
-└── Lineage (signal versions, data versions used)
+BacktestRun (Resource)
+├── type: "BacktestRun"
+├── parent_id: BacktestInstance
+├── status: "running" | "completed" | "failed"
+├── outputs:
+│   ├── PortfolioWeights (time series dataset)
+│   ├── Returns (realized, attributed)
+│   ├── Metrics
+│   │   ├── Sharpe ratio, Sortino ratio
+│   │   ├── Max drawdown, Calmar ratio
+│   │   ├── Turnover, Transaction costs
+│   │   └── Win rate, Profit factor
+│   ├── Trades (execution log)
+│   └── Equity curve (time series)
+└── Lineage (signal versions, data versions, optimizer version used)
 ```
+
+---
+
+## 16b) Portfolio Optimization Architecture
+
+### 16b.1 Portfolio Optimizer as Plugin
+
+**PortfolioOptimizerDef** is a plugin definition for portfolio construction algorithms. Different approaches require different code implementations:
+
+| Algorithm | Description | Key Parameters |
+|-----------|-------------|----------------|
+| `MVOOptimizer` | Mean-Variance Optimization | risk_aversion, target_return |
+| `HRPOptimizer` | Hierarchical Risk Parity | linkage_method, distance_metric |
+| `BlackLitterman` | Black-Litterman model | tau, confidence_matrix |
+| `RiskParity` | Risk parity allocation | risk_budget, risk_measure |
+| `RLOptimizer` | Reinforcement Learning | model_architecture, reward_function |
+
+### 16b.2 Portfolio Optimizer Definition Structure
+
+```
+PortfolioOptimizerDef/
+├── src/
+│   ├── __init__.py
+│   ├── optimizer.py          # Main optimization logic
+│   ├── constraints.py        # Constraint handling
+│   └── config.py             # Parameters schema
+├── tests/
+│   └── test_optimizer.py
+└── docs/
+    └── README.md
+```
+
+### 16b.3 Portfolio Optimizer Instance
+
+```
+PortfolioOptimizerInstance (Resource)
+├── type: "PortfolioOptimizerInstance"
+├── definition_resource_id: PortfolioOptimizerDef
+├── definition_version_id: specific version
+├── config:
+│   ├── constraints:
+│   │   ├── max_weight: 0.3
+│   │   ├── min_weight: 0.0
+│   │   ├── max_leverage: 1.5
+│   │   ├── max_turnover: 0.5
+│   │   └── sector_limits: {...}
+│   ├── risk_model: "exponential_cov" | "shrinkage" | "factor"
+│   ├── lookback_window: 252
+│   └── algorithm_params: {...}  # Algorithm-specific
+└── Children:
+    └── PortfolioOptimizationRun (execution results)
+```
+
+### 16b.4 Integration with Backtest
+
+BacktestInstance can reference a PortfolioOptimizerInstance:
+
+```python
+BacktestInstance(
+    assets=["ES1", "NQ1", "CL1"],
+    signals=[signal_1_id, signal_2_id],
+    portfolio_optimizer=optimizer_instance_id,  # Optional
+    date_range={...},
+    ...
+)
+```
+
+If no optimizer is specified, a simple signal-weighted allocation is used.
 
 ---
 
 ## 17) Definition Hub UI (Extensions Page)
 
-### 17.1 Six Plugin Types
+### 17.1 Seven Plugin Types
 
-The Definition Hub (UI name: "Extensions") displays registered plugin definitions in six categories:
+The Definition Hub (UI name: "Extensions") displays registered plugin definitions in seven categories:
 
 | Plugin Type | Definition Resource | Description |
 |-------------|--------------------| -------------|
@@ -1105,6 +1275,7 @@ The Definition Hub (UI name: "Extensions") displays registered plugin definition
 | **Data Store** | `StoreDef` | Persistence strategies (Parquet, virtual cache) |
 | **Data Accessor** | `AccessorDef` | Retrieval interfaces (PIT, snapshot, field) |
 | **ML Model** | `MLModuleDef` | Trainable ops with 5 code components |
+| **Portfolio Optimizer** | `PortfolioOptimizerDef` | Portfolio construction algorithms (MVO, HRP, Black-Litterman, Risk-Parity, RL) |
 
 ### 17.2 Plugin Definition Package Structure
 
@@ -1146,12 +1317,14 @@ OpDef             →   (used in expression) →   ExpressionRun
 
 ### 18.1 Real Instance Resources by Hub
 
-| Hub | Instance Type | Composed From |
-|-----|---------------|---------------|
-| **Dataset Inventory** | DatasetInstance | Pipeline + Store + Accessor + optional Expression |
-| **Signal Hub** | SignalInstance (specialized DatasetInstance) | Signal-validated dataset + backtest procedure |
-| **MLOps Center** | ModelInstance | MLModuleDef + datasets + config |
-| **Experiment Studio** | ExperimentInstance | Expressions + preview datasets |
+| Hub | Instance Type | Composed From | Notes |
+|-----|---------------|---------------|-------|
+| **Dataset Inventory** | DatasetInstance | Pipeline + Store + Accessor + optional Expression | Core data entities |
+| **Signal Hub** | SignalInstance | Signal-validated dataset + SignalSpec | Specialized datasets for alpha |
+| **MLOps Center** | ModelInstance | MLModuleDef + datasets + config | ML model deployments |
+| **Experiment Studio** | ExperimentInstance | Expressions + preview datasets | Research experiments |
+| **Backtest Center** | BacktestInstance | Assets + Signals + config (no Def needed) | Backtest configurations |
+| **Portfolio Optimizers** | PortfolioOptimizerInstance | PortfolioOptimizerDef + constraints | Allocation algorithms |
 
 ### 18.2 Dataset Inventory Composition
 

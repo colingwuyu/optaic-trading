@@ -42,13 +42,39 @@ ActivityEnvelope(
 
 Use pattern: `<resource>.<verb>`
 
+### Core Resource Actions
 ```
 signal.created       signal.updated       signal.deleted
+dataset.created      dataset.updated      dataset.deleted
 dataset.refreshed    dataset.validated    dataset.schema_changed
+```
+
+### Run Lifecycle Actions
+```
+run.started          run.completed        run.failed          run.cancelled
+backtest.started     backtest.completed   backtest.failed
+training.started     training.completed   training.failed
+inference.started    inference.completed  inference.failed
+optimization.started optimization.completed optimization.failed
+monitoring.started   monitoring.completed monitoring.alert
+```
+
+### Portfolio Actions
+```
 portfolio.rebalanced portfolio.constraints_updated
-backtest.submitted   backtest.completed   backtest.failed
-promotion.requested  promotion.approved   promotion.merged
-guardrails.validated guardrails.blocked
+portfolio.weights_computed portfolio.optimization_started
+```
+
+### Promotion/Workflow Actions
+```
+promotion.requested  promotion.approved   promotion.merged    promotion.rejected
+guardrails.validated guardrails.blocked   guardrails.warned
+```
+
+### Monitoring Actions
+```
+monitoring.drift_detected    monitoring.performance_alert
+monitoring.data_quality_alert monitoring.threshold_breach
 ```
 
 ## Emission Patterns

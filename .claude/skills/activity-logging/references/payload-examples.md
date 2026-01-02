@@ -76,6 +76,60 @@ payload = {
         "total_return": 0.23
     }
 }
+
+# optimization.completed
+payload = {
+    "optimizer_type": "MVO",
+    "duration_seconds": 5.2,
+    "solver_status": "optimal",
+    "weights_ref": "s3://runs/opt123/weights.json",
+    "metrics": {
+        "expected_return": 0.12,
+        "expected_volatility": 0.18,
+        "effective_n": 8.2
+    }
+}
+
+# training.completed
+payload = {
+    "model_type": "XGBoost",
+    "duration_seconds": 2700,
+    "artifact_ref": "s3://models/xgb_v3/",
+    "metrics": {
+        "train_rmse": 0.015,
+        "val_rmse": 0.018,
+        "train_r2": 0.85,
+        "val_r2": 0.78
+    }
+}
+
+# inference.completed
+payload = {
+    "num_predictions": 500,
+    "duration_ms": 150,
+    "predictions_ref": "s3://runs/inf123/predictions.parquet"
+}
+
+# monitoring.completed
+payload = {
+    "monitoring_type": "model_drift",
+    "duration_seconds": 30,
+    "alerts_count": 1,
+    "metrics": {
+        "overall_drift_score": 0.12,
+        "features_with_drift": ["volatility_20d"]
+    }
+}
+
+# monitoring.alert
+payload = {
+    "alert_type": "feature_drift_warning",
+    "feature": "volatility_20d",
+    "metric_name": "psi",
+    "metric_value": 0.22,
+    "threshold": 0.20,
+    "severity": "warning"
+}
 ```
 
 ## Governance Events
