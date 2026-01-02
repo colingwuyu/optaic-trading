@@ -1,4 +1,15 @@
 import { Centrifuge, type Subscription } from "centrifuge";
+import { DatasetsClient, type IApiClient } from "./datasets.js";
+import { SignalsClient } from "./signals.js";
+import { OpsClient } from "./ops.js";
+import { PipelinesClient } from "./pipelines.js";
+import { ExperimentsClient } from "./experiments.js";
+
+export * from "./datasets.js";
+export * from "./signals.js";
+export * from "./ops.js";
+export * from "./pipelines.js";
+export * from "./experiments.js";
 
 export type UUID = string;
 
@@ -279,10 +290,16 @@ export class ApiError extends Error {
   }
 }
 
-export class ApiClient {
+export class ApiClient implements IApiClient {
   private baseUrl: string;
   private headers: Record<string, string>;
   private fetcher: typeof fetch;
+
+  public datasets: DatasetsClient;
+  public signals: SignalsClient;
+  public ops: OpsClient;
+  public pipelines: PipelinesClient;
+  public experiments: ExperimentsClient;
 
   constructor(baseUrl: string, options: ApiClientOptions) {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
@@ -298,9 +315,16 @@ export class ApiClient {
       "X-Principal-Id": options.principalId,
       ...options.headers,
     };
+
+    // Initialize Quant Domain Clients
+    this.datasets = new DatasetsClient(this);
+    this.signals = new SignalsClient(this);
+    this.ops = new OpsClient(this);
+    this.pipelines = new PipelinesClient(this);
+    this.experiments = new ExperimentsClient(this);
   }
 
-  private async request<T>(
+  public async request<T>(
     path: string,
     init: RequestInit = {},
   ): Promise<T> {
