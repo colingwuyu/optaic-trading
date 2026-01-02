@@ -12,15 +12,20 @@ from starlette.staticfiles import StaticFiles
 from apps.api.routers.activities import router as activities_router
 from apps.api.routers.attachments import router as attachments_router
 from apps.api.routers.chat import router as chat_router
+from apps.api.routers.datasets import router as datasets_router
+from apps.api.routers.experiments import router as experiments_router
 from apps.api.routers.guardrails import router as guardrails_router
 from apps.api.routers.health import router as health_router
 from apps.api.routers.merge_requests import router as merge_requests_router
+from apps.api.routers.ops import router as ops_router
+from apps.api.routers.pipelines import router as pipelines_router
 from apps.api.routers.principals import router as principals_router
 from apps.api.routers.promotions import router as promotions_router
 from apps.api.routers.realtime import router as realtime_router
 from apps.api.routers.rbac import router as rbac_router
 from apps.api.routers.refs import router as refs_router
 from apps.api.routers.resources import router as resources_router
+from apps.api.routers.signals import router as signals_router
 from apps.api.routers.subscriptions import router as subscriptions_router
 from apps.api.routers.system import router as system_router
 from apps.api.routers.tenants import router as tenants_router
@@ -36,13 +41,18 @@ tags_metadata = [
     {"name": "Activities", "description": "Activity feed filtered by RBAC."},
     {"name": "Attachments", "description": "Attachment upload and finalize."},
     {"name": "Chat", "description": "Channels, messages, and read receipts."},
-    {"name": "Attachments", "description": "Attachment uploads and finalization."},
     {"name": "Realtime", "description": "Centrifugo token issuance."},
     {"name": "Refs", "description": "Branch and ref operations."},
     {"name": "MergeRequests", "description": "Merge request workflows."},
     {"name": "Promotions", "description": "Promotion requests and execution."},
     {"name": "Subscriptions", "description": "Resource subscriptions."},
     {"name": "System", "description": "System upgrades and runtime info."},
+    # Quant Domain
+    {"name": "Datasets", "description": "Dataset preview, status, and refresh."},
+    {"name": "Signals", "description": "Signal registration, validation, and promotion."},
+    {"name": "Operators", "description": "Expression operators and evaluation."},
+    {"name": "Experiments", "description": "Expression experiments and macros."},
+    {"name": "Pipelines", "description": "Pipeline definitions, instances, and runs."},
 ]
 
 @asynccontextmanager
@@ -51,6 +61,14 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     configure_logging(settings)
     logger = structlog.get_logger("api").bind(app_env=settings.app_env)
     logger.info("api.startup", log_level=settings.log_level)
+
+    # Run startup hooks (seed definitions, etc.)
+    try:
+        from libs.core.startup import run_startup_hooks
+        await run_startup_hooks()
+    except Exception as e:
+        logger.warning("api.startup_hooks_failed", error=str(e))
+
     yield
     logger.info("api.shutdown")
 
@@ -105,6 +123,12 @@ app.include_router(merge_requests_router)
 app.include_router(promotions_router)
 app.include_router(subscriptions_router)
 app.include_router(system_router)
+# Quant Domain routers
+app.include_router(datasets_router)
+app.include_router(signals_router)
+app.include_router(ops_router)
+app.include_router(experiments_router)
+app.include_router(pipelines_router)
 
 webui_dist = _get_webui_dist()
 if webui_dist and webui_dist.is_dir():

@@ -307,7 +307,7 @@ class PipelineService:
             raise ValueError("Pipeline definition not found")
 
         # Build pipeline from factory
-        _ = PIPELINE_FACTORY.build(
+        _pipeline = PIPELINE_FACTORY.build(
             definition.code_ref,
             resource_id=str(instance_id),
             config=instance.config_json or {},

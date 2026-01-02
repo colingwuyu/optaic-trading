@@ -68,7 +68,40 @@ Definition.code_ref → FACTORY.build(code_ref) → Execution Object
 **Seeding** (scripts/seed_definitions.py):
 - Built-in definitions seeded at startup with code_ref matching factory keys
 
-## 6. References
+## 6. API Layer (Phase 4)
+
+### Routers
+Location: `apps/api/routers/`
+- `ops.py` - `/ops` endpoints (list, get, evaluate)
+- `pipelines.py` - `/pipelines` endpoints (definitions, instances, runs)
+- `experiments.py` - `/experiments` endpoints (create, run, save-as-macro)
+- `datasets.py` - `/datasets` endpoints (status, preview, refresh)
+- `signals.py` - `/signals` endpoints (register, validate, promote)
+
+### Services
+Location: `apps/api/services/`
+- `DatasetService` - get_status, preview, refresh
+- `SignalService` - register_signal, validate_signal, promote_signal
+- `PipelineService` - submit_definition, deploy_definition, create_instance, trigger_run
+- `ExperimentService` - create_experiment, run_experiment, save_as_macro
+- `OpService` - list_operators, get_operator, evaluate_expression
+
+### Schemas
+Location: `apps/api/schemas.py` (Quant Domain section)
+
+### Router Pattern
+```python
+# 1. Get resource and check RBAC
+resource = await get_resource_or_404(db, actor.tenant_id, id)
+await authorize_or_403(db, actor, Permission.RESOURCE_READ, resource.id)
+# 2. Call service (services emit activities, NOT routers)
+service = DatasetService()
+result = await service.preview(session=db, actor=actor, ...)
+# 3. Return DTO (never SQLAlchemy models)
+return DatasetPreviewOut(**result)
+```
+
+## 7. References
 
 See `.claude/skills/quant-resource-patterns/` for complete patterns:
 - `SKILL.md` - Full resource implementation guide

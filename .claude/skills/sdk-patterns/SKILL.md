@@ -119,6 +119,32 @@ class GuardrailsBlockedError(OptAICError):
         self.report = report  # ValidationReport for user inspection
 ```
 
+## API Endpoint Mapping
+
+SDK methods map to REST API endpoints. See [docs/API_QUANT_REFERENCE.md](../../../docs/API_QUANT_REFERENCE.md).
+
+| SDK Method | HTTP | Endpoint |
+|------------|------|----------|
+| `ops.list()` | GET | `/ops` |
+| `ops.get(name)` | GET | `/ops/{name}` |
+| `ops.evaluate(expr, ctx)` | POST | `/ops/evaluate` |
+| `pipelines.submit_definition(...)` | POST | `/pipelines/definitions` |
+| `pipelines.deploy(id)` | POST | `/pipelines/definitions/{id}/deploy` |
+| `pipelines.create_instance(...)` | POST | `/pipelines/instances` |
+| `pipelines.run(id)` | POST | `/pipelines/instances/{id}/run` |
+| `datasets.get(id)` | GET | `/datasets/{id}` |
+| `datasets.status(id)` | GET | `/datasets/{id}/status` |
+| `datasets.preview(id, ...)` | POST | `/datasets/{id}/preview` |
+| `datasets.refresh(id)` | POST | `/datasets/{id}/refresh` |
+| `signals.register(...)` | POST | `/signals` |
+| `signals.get(id)` | GET | `/signals/{id}` |
+| `signals.validate(id)` | POST | `/signals/{id}/validate` |
+| `signals.promote(id)` | POST | `/signals/{id}/promote` |
+| `experiments.create(...)` | POST | `/experiments` |
+| `experiments.get(id)` | GET | `/experiments/{id}` |
+| `experiments.run(id, ...)` | POST | `/experiments/{id}/run` |
+| `experiments.save_as_macro(id)` | POST | `/experiments/{id}/save-as-macro` |
+
 ## Reference Files
 
 - [Client Patterns](references/client-patterns.md) - Architecture, mixins, exceptions

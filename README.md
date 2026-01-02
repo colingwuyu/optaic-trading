@@ -11,6 +11,9 @@ and a Windows-friendly embedded runtime.
 - [Ops checklist](docs/OPS_CHECKLIST.md)
 - [User install & upgrade (Windows)](docs/USER_INSTALL_WINDOWS.md)
 
+### API Reference
+- [Quant Domain API](docs/API_QUANT_REFERENCE.md) - Datasets, Signals, Pipelines, Operators, Experiments
+
 ### DevOps & Release
 - [Release flow + promotion lanes](docs/devops_release.md)
 - [Services lifecycle (startup/shutdown)](docs/SERVICES_LIFECYCLE.md)
@@ -27,18 +30,27 @@ and a Windows-friendly embedded runtime.
 - Supports Windows-first, Docker-optional deployment with automatic DB migrations.
 - Enables lane-based promotion (staging → UAT → prod) via internal artifactory.
 
-## Quant Domain Features (Phase 2)
+## Quant Domain Features
+
+### Data Layer (Phase 2)
 - **Data Pipelines**: Flexible ETL pipelines (FRED, Bloomberg, Expression) integrated with governance.
 - **Dataset Management**: Versioned datasets with PIT (Point-in-Time) access and lineage tracking.
 - **Signal Engine**: Promote datasets to signals with validation contracts and audit trails.
-- **Operator Library**: Built-in library of time-series (REF, DELTA), statistical (MEAN, STD), and math operators.
-- **Guardrails**: Policy enforcement for data contracts (schema, bounds, freshness).
-- **Extensible SDK**: Python SDK extensions for datasets, signals, and pipelines.
+- **Operator Library**: 25+ built-in operators (REF, DELTA, MEAN, STD, CORR, ZSCORE, etc.).
+- **Expression Engine**: Evaluate complex expressions with dataset references.
 
-## Phase 3: Research & Experimentation
-- **Expression Experiments**: Sandbox for testing signals and strategies using the expression engine (MEAN, SUM, etc.).
-- **Macro Definitions**: Save successful experiments as reusable `OpMacroDef` resources for use in production pipelines.
-- **Vintage Data Support**: Full Point-in-Time (PIT) correctness with `EconomicsAccessor` for revision-aware macroeconomic data.
+### API Layer (Phase 4)
+- **`/ops`**: List operators, get details, evaluate expressions
+- **`/pipelines`**: Pipeline definition CRUD, instance management, run triggers
+- **`/datasets`**: Dataset preview (PIT-aware), status, refresh
+- **`/signals`**: Signal registration, validation, promotion workflow
+- **`/experiments`**: Expression experiments, save as macro
+
+### Governance
+- **Guardrails**: Policy enforcement for data contracts (schema, bounds, freshness).
+- **RBAC**: Role-based access control on all resources.
+- **Audit**: Activity events for all mutations.
+- **Extensible SDK**: Python SDK extensions for datasets, signals, and pipelines.
 
 ## Tech Stack
 - Python 3.11+

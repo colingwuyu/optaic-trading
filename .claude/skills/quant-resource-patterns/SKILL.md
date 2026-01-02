@@ -126,6 +126,83 @@ Definition.code_ref → FACTORY.build(code_ref) → Execution Object
 
 See [Service Patterns](references/service-patterns.md) for implementation details.
 
+## API Router Patterns
+
+Location: `apps/api/routers/<domain>.py`
+
+### Implemented Routers
+
+| Router | Prefix | Key Endpoints |
+|--------|--------|---------------|
+| `ops.py` | `/ops` | List operators, get details, evaluate expressions |
+| `pipelines.py` | `/pipelines` | Definition CRUD, instance CRUD, trigger runs |
+| `experiments.py` | `/experiments` | Create, run, update, save as macro |
+| `datasets.py` | `/datasets` | Get info, status, preview, refresh |
+| `signals.py` | `/signals` | Register, validate, promote, list |
+
+### Router Pattern
+
+```python
+from apps.api.deps import get_actor, get_db
+from apps.api.rbac_utils import authorize_or_403, get_resource_or_404
+from apps.api.services import DatasetService
+
+@router.post("/{id}/preview", response_model=DatasetPreviewOut)
+async def preview_dataset(
+    dataset_id: UUID,
+    payload: DatasetPreviewRequest = Body(...),
+    actor: ActorContext = Depends(get_actor),
+    db: AsyncSession = Depends(get_db),
+) -> DatasetPreviewOut:
+    # 1. Get resource and check RBAC
+    resource = await get_resource_or_404(db, actor.tenant_id, dataset_id)
+    await authorize_or_403(db, actor, Permission.RESOURCE_READ, resource.id)
+
+    # 2. Call service (services emit activities, NOT routers)
+    service = DatasetService()
+    result = await service.preview(session=db, actor=actor, ...)
+
+    # 3. Return DTO (never SQLAlchemy models)
+    return DatasetPreviewOut(**result)
+```
+
+## Service Layer
+
+Location: `apps/api/services/<domain>_service.py`
+
+### Implemented Services
+
+| Service | Key Methods |
+|---------|-------------|
+| `DatasetService` | `get_status`, `preview`, `refresh` |
+| `SignalService` | `register_signal`, `validate_signal`, `promote_signal`, `list_signals` |
+| `PipelineService` | `submit_definition`, `deploy_definition`, `create_instance`, `trigger_run` |
+| `ExperimentService` | `create_experiment`, `run_experiment`, `save_as_macro`, `update_experiment` |
+| `OpService` | `list_operators`, `get_operator`, `evaluate_expression` |
+
+### Service Exports
+
+```python
+# apps/api/services/__init__.py
+from apps.api.services.dataset_service import DatasetService
+from apps.api.services.experiment_service import ExperimentService
+from apps.api.services.op_service import OpService
+from apps.api.services.pipeline_service import PipelineService
+from apps.api.services.signal_service import SignalService
+```
+
+## API Schemas
+
+Location: `apps/api/schemas.py` (Quant Domain section)
+
+| Schema Group | DTOs |
+|--------------|------|
+| Pipeline | `PipelineDefinitionCreate`, `PipelineDefinitionOut`, `PipelineInstanceCreate`, `PipelineInstanceOut`, `PipelineRunOut` |
+| Dataset | `DatasetPreviewRequest`, `DatasetPreviewOut`, `DatasetRefreshOut`, `DatasetStatusOut` |
+| Signal | `SignalRegisterRequest`, `SignalOut`, `SignalValidateOut` |
+| Operator | `OperatorOut`, `OperatorListOut`, `ExpressionEvaluateRequest`, `ExpressionEvaluateOut` |
+| Experiment | `ExperimentCreate`, `ExperimentOut`, `ExperimentRunRequest`, `ExprimentRunOut`, `MacroSaveOut` |
+
 ## Reference Files
 
 - [DB Model Patterns](references/db-patterns.md) - SQLAlchemy patterns

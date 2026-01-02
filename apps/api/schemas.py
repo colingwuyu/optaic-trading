@@ -431,3 +431,222 @@ class AttachmentFinalizeOut(BaseModel):
     created_at: datetime
 
 ResourceTree.model_rebuild()
+
+# ============================================================================
+# Quant Domain Schemas
+# ============================================================================
+
+# --- Pipeline Schemas ---
+
+class PipelineDefinitionCreate(BaseModel):
+    """Create a pipeline definition."""
+    name: str = Field(examples=["FRED Pipeline"])
+    code_ref: str = Field(examples=["FREDPipeline"])
+    category: str = Field(examples=["etl"])
+    parent_id: UUID = Field(examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"])
+    interface_spec: str = Field(default="libs.data.pipelines.base.BasePipeline")
+    input_schema: Dict[str, Any] = Field(default_factory=dict)
+    output_schema: Dict[str, Any] = Field(default_factory=dict)
+    parameters_schema: Dict[str, Any] = Field(default_factory=dict)
+    guardrail_contracts: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class PipelineDefinitionOut(BaseModel):
+    """Pipeline definition response."""
+    id: UUID
+    name: str
+    code_ref: str
+    category: str
+    status: str
+
+
+class PipelineInstanceCreate(BaseModel):
+    """Create a pipeline instance from a definition."""
+    name: str = Field(examples=["Daily FRED Update"])
+    definition_id: UUID = Field(examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"])
+    parent_id: UUID = Field(examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"])
+    config: Dict[str, Any] = Field(default_factory=dict)
+    schedule: Dict[str, Any] = Field(default_factory=dict)
+
+
+class PipelineInstanceOut(BaseModel):
+    """Pipeline instance response."""
+    id: UUID
+    name: str
+    definition_id: UUID
+    code_ref: str
+    status: str
+
+
+class PipelineRunOut(BaseModel):
+    """Pipeline run response."""
+    instance_id: UUID
+    code_ref: str
+    status: str
+    message: str
+
+
+# --- Dataset Schemas ---
+
+class DatasetPreviewRequest(BaseModel):
+    """Request dataset preview."""
+    start_date: Optional[str] = Field(default=None, examples=["2024-01-01"])
+    end_date: Optional[str] = Field(default=None, examples=["2024-12-31"])
+    as_of_date: Optional[str] = Field(default=None, examples=["2024-06-15"])
+    limit: int = Field(default=100, ge=1, le=1000)
+
+
+class DatasetPreviewOut(BaseModel):
+    """Dataset preview response."""
+    id: UUID
+    name: str
+    columns: List[str]
+    data: List[Dict[str, Any]]
+    row_count: int
+    truncated: bool
+
+
+class DatasetRefreshOut(BaseModel):
+    """Dataset refresh response."""
+    id: UUID
+    name: str
+    status: str
+    message: str
+
+
+class DatasetStatusOut(BaseModel):
+    """Dataset status response."""
+    id: UUID
+    name: str
+    freshness_status: str
+    last_data_date: Optional[str] = None
+    row_count: Optional[int] = None
+
+
+# --- Signal Schemas ---
+
+class SignalRegisterRequest(BaseModel):
+    """Register a dataset as a signal."""
+    dataset_id: UUID = Field(examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"])
+    name: str = Field(examples=["momentum_signal"])
+    parent_id: UUID = Field(examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"])
+    min_value: float = Field(default=-1.0)
+    max_value: float = Field(default=1.0)
+    allow_nan: bool = Field(default=False)
+    neutral_value: float = Field(default=0.0)
+
+
+class SignalOut(BaseModel):
+    """Signal response."""
+    id: UUID
+    name: str
+    min_value: float
+    max_value: float
+    allow_nan: bool
+    neutral_value: float
+    status: str
+
+
+class SignalValidateOut(BaseModel):
+    """Signal validation response."""
+    id: UUID
+    valid: bool
+    issues: List[Dict[str, Any]]
+
+
+# --- Operator Schemas ---
+
+class OperatorOut(BaseModel):
+    """Operator info response."""
+    name: str
+    category: str
+    arity: int
+    description: str
+
+
+class OperatorListOut(BaseModel):
+    """List of operators response."""
+    operators: List[OperatorOut]
+    count: int
+
+
+class ExpressionEvaluateRequest(BaseModel):
+    """Evaluate an expression."""
+    expression: str = Field(examples=["MEAN($close, 20)"])
+    context: Dict[str, UUID] = Field(
+        default_factory=dict,
+        examples=[{"close": "9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"}]
+    )
+    start_date: Optional[str] = Field(default=None, examples=["2024-01-01"])
+    end_date: Optional[str] = Field(default=None, examples=["2024-12-31"])
+
+
+class ExpressionEvaluateOut(BaseModel):
+    """Expression evaluation response."""
+    success: bool
+    expression: str
+    result_type: Optional[str] = None
+    columns: Optional[List[str]] = None
+    data: Optional[List[Dict[str, Any]]] = None
+    value: Optional[Any] = None
+    row_count: Optional[int] = None
+    truncated: Optional[bool] = None
+    errors: Optional[List[str]] = None
+
+
+# --- Experiment Schemas ---
+
+class ExperimentCreate(BaseModel):
+    """Create an experiment."""
+    name: str = Field(examples=["Momentum Strategy"])
+    expression: str = Field(examples=["CORR($returns, REF($volume, 1), 20)"])
+    parent_id: UUID = Field(examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"])
+    input_datasets: Dict[str, UUID] = Field(default_factory=dict)
+    description: Optional[str] = Field(default=None)
+
+
+class ExperimentOut(BaseModel):
+    """Experiment response."""
+    id: UUID
+    name: str
+    expression: str
+    operators_used: List[str] = Field(default_factory=list)
+    datasets_referenced: List[str] = Field(default_factory=list)
+    status: str
+
+
+class ExperimentRunRequest(BaseModel):
+    """Run an experiment."""
+    start_date: Optional[str] = Field(default=None, examples=["2024-01-01"])
+    end_date: Optional[str] = Field(default=None, examples=["2024-12-31"])
+    limit: int = Field(default=100, ge=1, le=1000)
+
+
+class ExperimentRunOut(BaseModel):
+    """Experiment run response."""
+    id: Optional[UUID] = None
+    success: bool
+    name: Optional[str] = None
+    expression: Optional[str] = None
+    result_type: Optional[str] = None
+    columns: Optional[List[str]] = None
+    data: Optional[List[Dict[str, Any]]] = None
+    value: Optional[Any] = None
+    row_count: Optional[int] = None
+    truncated: Optional[bool] = None
+    error: Optional[str] = None
+
+
+class ExperimentUpdate(BaseModel):
+    """Update an experiment."""
+    expression: Optional[str] = Field(default=None)
+    input_datasets: Optional[Dict[str, UUID]] = Field(default=None)
+
+
+class MacroSaveOut(BaseModel):
+    """Macro save response."""
+    id: UUID
+    name: str
+    expression: str
+    input_aliases: List[str]
+    status: str

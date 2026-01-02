@@ -300,11 +300,15 @@ async def fetch_outbox_batch(
     if topic is not None:
         stmt = stmt.where(Outbox.topic == topic)
 
-    stmt = (
-        stmt.order_by(Outbox.created_at)
-        .with_for_update(skip_locked=True)
-        .limit(batch_size)
-    )
+    stmt = stmt.order_by(Outbox.created_at)
+    
+    # Check for SQLite
+    is_sqlite = getattr(session.bind.dialect, "name", "") == "sqlite"
+    
+    if not is_sqlite:
+        stmt = stmt.with_for_update(skip_locked=True)
+    
+    stmt = stmt.limit(batch_size)
     result = await session.scalars(stmt)
     return list(result.all())
 

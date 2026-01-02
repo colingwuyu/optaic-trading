@@ -247,6 +247,7 @@ class SignalService:
         actor: ActorContext,
         *,
         parent_id: UUID | None = None,
+        status: str | None = None,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
         """List signals.
@@ -255,6 +256,7 @@ class SignalService:
             session: Database session
             actor: Actor context
             parent_id: Optional parent resource filter
+            status: Optional status filter (e.g. "active")
             limit: Maximum results
 
         Returns:
@@ -265,9 +267,24 @@ class SignalService:
             .join(SignalSpec, Resource.id == SignalSpec.resource_id)
             .where(
                 Resource.tenant_id == actor.tenant_id,
-                Resource.status == "active",
             )
         )
+
+        if status:
+            stmt = stmt.where(Resource.status == status)
+        else:
+            # Default to active if no status specified? Or list all?
+            # Originally it was hardcoded to active. Let's keep that default if status is None
+            # Or usually list endpoints show all if not filtered?
+            # Existing code hardcoded 'active'. Let's relax it or default to active.
+            # Usually list endpoints without status filter return all non-deleted?
+            # Let's match original behavior if status is None -> 'active'
+            # But wait, Router default in signals.py is None. 
+            # If I want to see 'registered' signals I need to pass status='registered'.
+            # If status is None, maybe return all? 
+            # Original code: where(Resource.status == "active")
+            # Usually users might want to see 'active' by default.
+            stmt = stmt.where(Resource.status == "active")
 
         if parent_id:
             stmt = stmt.where(Resource.parent_id == parent_id)

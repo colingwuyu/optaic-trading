@@ -74,3 +74,6 @@ Thumbs.db
 # DATA_DIR contents are excluded by location, not pattern
 *.pdf
 *.docx
+
+# Plan file
+golden-wibbling-steele.md

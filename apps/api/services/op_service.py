@@ -42,22 +42,44 @@ class OpService:
         """Initialize service."""
         self.expression_engine = ExpressionEngine()
 
-    def list_operators(self) -> list[dict[str, Any]]:
+    def list_operators(self, category: str | None = None) -> list[dict[str, Any]]:
         """List all available operators.
 
         Returns operators directly from OPS_REGISTRY.
         For full metadata (description, schemas), query OpDefinition resources.
 
+        Args:
+            category: Optional filter by category
+
         Returns:
             List of operator info dicts
         """
+        import inspect
+
         operators = []
         for name, func in OPS_REGISTRY.items():
-            category = getattr(func, "category", "Other")
+            op_category = getattr(func, "category", "Other")
+
+            # Apply category filter if provided
+            if category and op_category.lower() != category.lower():
+                continue
+
+            # Get arity from function signature
+            try:
+                sig = inspect.signature(func)
+                arity = len(sig.parameters)
+            except (ValueError, TypeError):
+                arity = 0
+
+            # Get description from docstring
+            description = (func.__doc__ or "").split("\n")[0].strip()
+
             operators.append({
                 "name": name,
-                "category": category,
+                "category": op_category,
                 "code_ref": name,  # code_ref matches registry key
+                "arity": arity,
+                "description": description,
             })
         return sorted(operators, key=lambda x: (x["category"], x["name"]))
 
@@ -113,16 +135,29 @@ class OpService:
         Returns:
             Operator info or None if not found
         """
+        import inspect
+
         key = name.upper()
         func = OPS_REGISTRY.get(key)
         if not func:
             return None
 
+        # Get arity from function signature
+        try:
+            sig = inspect.signature(func)
+            arity = len(sig.parameters)
+        except (ValueError, TypeError):
+            arity = 0
+
+        # Get description from docstring
+        description = (func.__doc__ or "").split("\n")[0].strip()
+
         return {
             "name": key,
             "category": getattr(func, "category", "Other"),
             "code_ref": key,
-            "doc": func.__doc__,
+            "arity": arity,
+            "description": description,
         }
 
     async def evaluate_expression(
