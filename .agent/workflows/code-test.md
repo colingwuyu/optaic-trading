@@ -3,25 +3,26 @@ description: Generate and run framework compliance tests for uncommitted code
 ---
 
 1. Identify files to test:
-   - Run `git status` and `git diff --name-only` to find modified or new files that are not yet committed.
-   - Focus on service layer, pipelines, SDK extensions, and DTOs.
+   - Run `git status` and `git diff --name-only` to find modified or new files.
+   - Scope: Service layer (`.py`), SDKs (`.py`, `.ts`), Frontend (`.tsx`), Utilities.
 
-2. Generate compliance tests for the identified files:
-   - **Activity Emission**: Create tests to verify `ActivityEnvelope` emission for mutations.
-   - **Guardrails**: Create tests to verify validation at lifecycle gates.
-   - **PIT Correctness**: Create tests for data accessors to ensure no lookahead bias.
-   - **DTO Serialization**: Create tests for any new Pydantic models.
-   - **Lazy Imports**: Create tests to verify heavy dependencies aren't imported at module level.
-   - Find out test suite gap from uncomitted implementation.
-   - Think hard to find the must to have tests in order to meeting user's requirements of the code implementation
-   - Ensure unit tests are grounded on data that is realistic, meaningful instead of mocking data
-   - Unit tests coverage of the new code implementation has to be at least 90%
+2. Generate/Refine tests for the identified files:
+   - **Backend (Python)**:
+     - Activity Emission, Guardrails, PIT Correctness, DTOs.
+     - Coverage target: >90% for logic.
+   - **Frontend/SDK (TypeScript)**:
+     - Unit tests for logic/utils (`vitest`/`jest`).
+     - Type checking (`tsc --noEmit`) for correctness.
+   - **Plan Alignment**: Ensure tests cover the *functional requirements* of the active task/plan.
+   - **Strategy**: Use realistic data; avoid excessive mocking of domain logic.
 
 3. Write the test files to the appropriate `tests/` directory (mirrored structure).
-   - Use standard naming: `test_<module>_activity.py`, `test_<module>_guardrails.py`, etc., or add to existing test files.
-   - tests folders are binded with the corresponding module, and name the test intuitively for developers
+   - Python: `tests/test_<module>.py`
+   - TypeScript: `src/__tests__/` or `*.test.ts` alongside code.
 
-4. Run the newly created tests using `uv run pytest <test_file>`.
+4. Run the tests:
+   - Python: `uv run pytest <test_file>`
+   - TypeScript: `npm run typecheck` AND `npm test` (in relevant package).
 
 5. Analyze results:
    - If tests fail, analyze the cause.

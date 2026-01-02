@@ -15,25 +15,32 @@ Skill for reviewing code to ensure it correctly adopts the OptAIC platform frame
 1. You have just written or modified service layer code
 2. You have implemented a new domain resource
 3. You have written data pipeline or accessor code
-4. You have extended the SDK with new client methods
-5. You have modified any file in `libs/core/`, `libs/db/`, `apps/api/`, `libs/sdk_py/`
+4. You have extended the SDK (Python OR TypeScript)
+5. You have modified frontend code (`apps/web`)
+6. You have modified any file in the repo related to the active task
 
 ### How to Identify Files to Review
-1. Check your recent edits - review ALL files you modified in this conversation
-2. Use `git diff --name-only` to see changed files
-3. Focus on `.py` files in the platform packages
+1. Check your recent edits - review ALL files you modified
+2. Use `git diff --name-only`
+3. **Include**: `.py`, `.ts`, `.tsx`, `.js`, `.json`
 
 ## When to Use
 
 Apply when:
 - **After completing any implementation task** (PROACTIVE)
 - Reviewing new domain resource implementations
-- Checking service layer code for framework compliance
-- Validating pipeline or data access code for PIT correctness
-- Reviewing SDK extensions for pattern adherence
-- Pre-merge code review of any platform component
+- Checking service layer code for compliance
+- Validating SDKs (Py/TS) and Frontend components
+- Verifying code meets specific requirements in `golden-wibbling-steele.md` (or valid plan)
 
 ## Critical Review Checklist
+
+### 0. Plan / Requirement Verification (CRITICAL)
+
+✅ Check:
+- Does the code actually implement the requirements in the active plan?
+- Are all fields/methods specified in the plan present?
+- Are there gaps between the plan and the code?
 
 ### 1. Activity Logging (REQUIRED for all mutations)
 
@@ -46,7 +53,6 @@ Apply when:
 ❌ Flag if:
 - Activity emitted in API handler or DB model
 - Activity missing for create/update/delete operations
-- Payload contains passwords, API keys, or large blobs
 
 ### 2. Guardrails Integration
 
@@ -56,52 +62,44 @@ Apply when:
 - Reports stored and activity events emitted
 - Enforcement respects staging (WARN) vs official (BLOCK)
 
-❌ Flag if:
-- Mutations skip guardrails validation
-- Enforcement hardcoded instead of policy-driven
+### 3. Frontend & TypeScript Patterns
 
-### 3. Two-Tier Resource Model
+✅ Check:
+- **Strict Types**: Interfaces defined for all data structures (No `any`).
+- **ApiClient Usage**: Components use `ApiClient` methods, never direct `fetch`.
+- **Hooks**: Logic encapsulated in custom hooks where appropriate.
+- **Error Handling**: UI handles API errors gracefully.
+
+❌ Flag if:
+- Hardcoded URLs or IDs in frontend code.
+- Direct `fetch` calls in components.
+- Props drilling > 3 levels (use Context).
+
+### 4. Two-Tier Resource Model
 
 ✅ Check:
 - **Definitions**: Abstract interface, versioned, testable
 - **Instances**: Config-as-code referencing `(def_id, def_version)`
 - **Runs**: Executions that produce immutable versions
 
-❌ Flag if:
-- Mixed definition/instance concepts
-- Version tracking missing on instance references
-
-### 4. PIT (Point-in-Time) Correctness
+### 5. PIT (Point-in-Time) Correctness
 
 ✅ Check:
 - `knowledge_date` tracked separately from `as_of_date`
 - PIT queries include both date constraints
 - No lookahead bias in data access
 
-❌ Flag if:
-- Only `date` column without PIT semantics
-- Queries that could access future data
-
-### 5. Lazy Import Pattern
+### 6. Lazy Import Pattern (Python)
 
 ✅ Check:
 - Heavy deps (pandas, numpy, torch, pyarrow) use `TYPE_CHECKING`
 - Runtime imports inside function bodies
-- `ImportError` gives actionable message
 
-❌ Flag if:
-- Heavy imports at module top level
-- Would break `optaic[sdk]` minimal install
-
-### 6. DTO Pattern
+### 7. DTO Pattern
 
 ✅ Check:
 - Pydantic `BaseModel` for all DTOs
 - SQLAlchemy models never exposed to API layer
-- DTOs are adapter-friendly (no vendor-specific types)
-
-❌ Flag if:
-- Raw SQLAlchemy models returned from API endpoints
 
 ## Review Workflow
 

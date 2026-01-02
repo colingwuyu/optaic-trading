@@ -47,30 +47,34 @@ git diff --name-only HEAD
 git diff --name-only --cached
 ```
 
-Focus on Python files in these locations:
-- `libs/core/domain/` - Services and DTOs
-- `libs/db/models/` - Database models
-- `apps/api/routers/` - API handlers
-- `libs/sdk_py/` - SDK extensions
-- `libs/core/pipelines/` - Data pipelines
+**Scope**: Check ALL modified code, not just backend.
+- **Backend**: `libs/core/`, `libs/db/`, `apps/api/`, `libs/sdk_py/`
+- **Frontend/SDK**: `apps/web/src/`, `libs/sdk_ts/src/`
 
-## Phase 2: Framework Compliance Review
+## Phase 2: Framework Compliance & Requirement Review
+
+**Context Check**:
+- Is there an active plan file (e.g. `*.md` in root)? Read it.
+- Verify code meets the *functional requirements* of that plan, not just technical patterns.
 
 Read the skill reference files for detailed patterns:
 - `.claude/skills/code-review/SKILL.md`
-- `.claude/skills/code-review/references/checklist.md`
-- `.claude/skills/code-review/references/anti-patterns.md`
 
-For each modified file, check:
+For each modified file, apply the relevant checklist:
 
 ### Service Layer Files (`*_service.py`)
 - [ ] Constructor takes `session`, `actor_id`, `tenant_id`
 - [ ] All mutations (create/update/delete) emit ActivityEnvelope
-- [ ] Activity emitted via `record_activity_with_outbox()` in service, NOT API handler
 - [ ] Action follows `<resource>.<verb>` pattern
 - [ ] Guardrails validation at create/update gates
 - [ ] Returns DTOs, not SQLAlchemy models
 - [ ] Methods are async
+
+### Frontend/TypeScript (`.ts`, `.tsx`)
+- [ ] **Type Safety**: Strictly typed interfaces (no `any`).
+- [ ] **API Usage**: Uses `ApiClient` methods, NOT raw `fetch` calls.
+- [ ] **State Management**: Uses React Context/Hooks appropriately.
+- [ ] **SDK Parity**: TS SDK matches Python SDK functionality (if applicable).
 
 ### DTO Files
 - [ ] Uses Pydantic `BaseModel`
@@ -80,21 +84,15 @@ For each modified file, check:
 ### Database Models
 - [ ] Inherits from shared `Base`
 - [ ] FK relationships defined
-- [ ] ResourceType enum updated if new type
 
 ### Pipeline/Accessor Code
 - [ ] `knowledge_date` field in Arrow schema
 - [ ] PIT queries include both `as_of_date` AND `knowledge_date`
-- [ ] No lookahead bias possible
 
-### SDK Extensions
-- [ ] Heavy deps (pandas, numpy, torch) use lazy imports
-- [ ] Dataclass models with `from_dict()`
-- [ ] Exception hierarchy followed
-
-### API Handlers
-- [ ] Returns Pydantic DTOs (not SQLAlchemy models)
-- [ ] Does NOT emit activities (service does this)
+### SDK Extensions (Py & TS)
+- [ ] Heavy deps use lazy imports (Python)
+- [ ] Consistent method signatures across languages
+- [ ] Error handling wraps/re-throws properly
 
 ## Phase 3: Fix Violations
 

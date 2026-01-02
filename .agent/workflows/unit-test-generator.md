@@ -3,12 +3,14 @@ description: Generate, validate, and run general unit tests for code
 ---
 
 1. Analyze the target code (user specified or uncommitted changes).
-   - Identify public methods, branching logic, and edge cases.
-   - Determine dependencies and mocking needs.
-   - Find out test suite gap from uncomitted implementation.
-   - Think hard to find the must to have tests in order to meeting user's requirements of the code implementation
-   - Ensure unit tests are grounded on data that is realistic, meaningful instead of mocking data
-   - Unit tests coverage of the new code implementation has to be at least 90%
+   - Identify language (Python, TypeScript/JS) and framework.
+   - **Requirement Check**: Read the active plan/task (e.g. `golden-wibbling-steele.md`) to understand *what* needs testing.
+   - Identify public methods, branching logic, and critical paths.
+   - **Gap Analysis**: Compare existing tests against requirements.
+   - **Quality Standard**:
+     - Realistic data (minimal mocking of values).
+     - >90% coverage for new logic.
+     - Tests must prove the *requirements* are met.
 
 2. Check for existing tests to avoid duplication.
 
