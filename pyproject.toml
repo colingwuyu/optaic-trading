@@ -202,3 +202,6 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["libs", "apps", "optaic"]
+filterwarnings = [
+    "ignore:The default datetime adapter is deprecated:DeprecationWarning:aiosqlite",
+]

@@ -6,6 +6,7 @@ from . import identity  # noqa: F401
 from . import merge  # noqa: F401
 from . import notification  # noqa: F401
 from . import promotion  # noqa: F401
+from . import quant  # noqa: F401
 from . import rbac  # noqa: F401
 from . import resource  # noqa: F401
 from . import runs  # noqa: F401
