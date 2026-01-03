@@ -163,6 +163,7 @@ class ExperimentsClient:
         Returns:
             Experiment run results with success, columns, data, row_count
         """
+
         # Convert dates to ISO format strings
         def _date_str(d: Optional[date | str]) -> Optional[str]:
             if d is None:

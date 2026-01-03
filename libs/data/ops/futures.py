@@ -80,7 +80,9 @@ def _get_contract_config(contract_name: str) -> RollConfig:
     )
 
 
-def _parse_contract_code(contracts: list[str], option: str = "contract_code") -> list[str]:
+def _parse_contract_code(
+    contracts: list[str], option: str = "contract_code"
+) -> list[str]:
     """Parse contract codes to extract generic or specific codes."""
     parsed = []
 
@@ -383,7 +385,9 @@ def roll_futures_op(
         if col in date_table.columns:
             date_table[col] = pd.to_datetime(date_table[col])
 
-    ticker_col = "INTERNAL_TICKER" if "INTERNAL_TICKER" in date_table.columns else "TICKER"
+    ticker_col = (
+        "INTERNAL_TICKER" if "INTERNAL_TICKER" in date_table.columns else "TICKER"
+    )
     date_table["generic_code"] = _parse_contract_code(
         date_table[ticker_col].to_list(), option="generic_code"
     )

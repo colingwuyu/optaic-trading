@@ -8,6 +8,7 @@ AsyncSessionLocal = async_sessionmaker(
     autoflush=False,
 )
 
+
 async def get_db():
     async with AsyncSessionLocal() as session:
         yield session

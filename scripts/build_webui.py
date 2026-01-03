@@ -16,6 +16,7 @@ TARGET_DIR = ROOT / "optaic" / "webui_dist"
 def _run(command: list[str], cwd: Path) -> None:
     subprocess.run(command, cwd=cwd, check=True)
 
+
 def _run_npm(args: list[str]) -> None:
     if shutil.which("npm") is None:
         raise FileNotFoundError(
@@ -28,6 +29,7 @@ def _run_npm(args: list[str]) -> None:
         command = ["npm", *args]
 
     _run(command, WEB_DIR)
+
 
 def _git_commit(root: Path) -> str | None:
     try:

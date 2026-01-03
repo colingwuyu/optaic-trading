@@ -40,9 +40,10 @@ def migration_paths(
     if package_root is not None:
         alembic_ini = package_root / "alembic.ini"
         migrations = package_root / "migrations"
-        with resources.as_file(alembic_ini) as config_path, resources.as_file(
-            migrations
-        ) as migrations_path:
+        with (
+            resources.as_file(alembic_ini) as config_path,
+            resources.as_file(migrations) as migrations_path,
+        ):
             yield config_path, migrations_path, None
             return
 
@@ -56,7 +57,9 @@ def run_migrations(database_url: str, repo_root: Path | None = None) -> None:
         if not config_path.exists():
             raise FileNotFoundError(f"Alembic config not found at {config_path}")
         if not migrations_path.exists():
-            raise FileNotFoundError(f"Alembic migrations not found at {migrations_path}")
+            raise FileNotFoundError(
+                f"Alembic migrations not found at {migrations_path}"
+            )
 
         if sys_path_root is not None and str(sys_path_root) not in sys.path:
             sys.path.insert(0, str(sys_path_root))

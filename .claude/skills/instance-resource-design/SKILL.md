@@ -1,6 +1,6 @@
 ---
 name: instance-resource-design
-description: Guide for designing Instance resources in OptAIC. Use when creating DatasetInstance, SignalInstance, ExperimentInstance, ModelInstance, PortfolioOptimizerInstance, or BacktestInstance. Covers definition references, config patterns, composition, and scheduling.
+description: Guide for designing Instance resources in OptAIC. Use when creating DatasetInstance, SignalInstance, ExperimentInstance, ModelInstance, PortfolioOptimizerInstance, or BacktestInstance. Covers definition references, config patterns, composition, flow execution pairing, and scheduling.
 ---
 
 # Instance Resource Design Patterns
@@ -13,6 +13,7 @@ Apply when:
 - Creating configured dataset/signal/model instances
 - Designing composition patterns (Pipeline + Store + Accessor)
 - Implementing scheduling and freshness tracking
+- Pairing Flow Execution Resources with Instances
 - Building special cases like BacktestInstance (no definition)
 
 ## Core Concept: Configured Usage
@@ -25,19 +26,99 @@ Instance = Configured Usage
 ├── definition_version_id     # Pinned version (optional)
 ├── config_json               # Runtime configuration
 ├── schedule_json             # Cron/refresh schedule
-└── upstream_refs             # Connected upstream resources
+├── upstream_refs             # Connected upstream resources
+└── flow_execution_handles    # Prefect deployments, MLflow experiments
 ```
+
+## Instance ↔ Flow Pairing
+
+**Critical Concept**: When an Instance is created, Flow Execution Resources are also created.
+
+Flow Execution Resources are static Prefect deployments (or equivalent orchestration handles) that are:
+- Created when Instance is created
+- Paired 1:1 or 1:N with Instance (some Instances have multiple flows)
+- Stored as handles in the Instance extension table
+- The "execution capability" vs Runs which are "execution activities"
+
+```
+DatasetInstance creation:
+├── Create Resource record
+├── Create extension table record
+├── Create Prefect deployment for refresh flow
+└── Store deployment_id in instance.prefect_deployment_id
+```
+
+See [references/flow-pairing.md](references/flow-pairing.md).
 
 ## Instance Types
 
-| Type | Parent | Definition Ref | Notes |
-|------|--------|---------------|-------|
-| `DatasetInstance` | Project | PipelineDef + StoreDef + AccessorDef | Composition |
-| `SignalInstance` | Project | Inherits from DatasetInstance | Promoted dataset |
-| `ExperimentInstance` | Project | OpDef/OpMacroDef | Expression config |
-| `ModelInstance` | Project | MLModuleDef | ML model config |
-| `PortfolioOptimizerInstance` | Project | PortfolioOptimizerDef | Optimizer config |
-| `BacktestInstance` | Project | None | Fixed procedure |
+| Type | Parent | Definition Ref | Flow Count | Notes |
+|------|--------|---------------|------------|-------|
+| `DatasetInstance` | Project | PipelineDef + StoreDef + AccessorDef | 1 | refresh_flow |
+| `SignalInstance` | Project | Inherits from DatasetInstance | 1 | Promoted dataset |
+| `ExperimentInstance` | Project | OpDef/OpMacroDef | 1 | preview_flow |
+| `ModelInstance` | Project | MLModuleDef | 3 | train/infer/monitor |
+| `PortfolioOptimizerInstance` | Project | PortfolioOptimizerDef | 1 | optimize_flow |
+| `BacktestInstance` | Project | None | 1 | Fixed procedure |
+
+## Multi-Flow Instances
+
+Some Instance types have multiple Flow Execution Resources:
+
+```
+ModelInstance:
+├── training_flow       → TrainingRun activities
+├── inference_flow      → InferenceRun activities
+└── monitoring_flow     → MonitoringRun activities
+
+Instance Extension Table:
+├── prefect_training_deployment_id
+├── prefect_inference_deployment_id
+├── prefect_monitoring_deployment_id
+├── mlflow_experiment_id        (training tracking)
+├── mlflow_registered_model_name (after promotion)
+└── evidently_project_id        (monitoring dashboard)
+```
+
+## Lineage is Flow-to-Flow
+
+Dependencies track flow statuses, not instance relationships:
+
+```
+DatasetInstance.refresh_flow
+        ↓ depends on
+UpstreamDataset.refresh_flow status = READY
+```
+
+Lineage checking uses `check_upstream_freshness()` to verify all upstream
+flow statuses before executing a downstream flow.
+
+## Status Aggregation
+
+Instance status aggregates from its Flow(s):
+
+```python
+# Single-flow Instance (DatasetInstance)
+instance.status = flow.status
+
+# Multi-flow Instance (ModelInstance)
+instance.status = aggregate([
+    training_flow.status,
+    inference_flow.status,
+    monitoring_flow.status,
+])
+# Uses min-severity: READY only if ALL flows are READY
+```
+
+Definition specifies the `status_aggregation_contract`:
+```json
+{
+    "status_aggregation_contract": {
+        "aggregation_method": "min_severity",
+        "status_priority": ["ERROR", "STALE", "RUNNING", "READY"]
+    }
+}
+```
 
 ## Composition Pattern
 
@@ -121,9 +202,16 @@ backtest_instance = {
 4. [ ] Track `upstream_refs` for lineage
 5. [ ] Add freshness tracking fields if scheduled
 6. [ ] Create extension table in `libs/db/models/`
+7. [ ] **Create Flow Execution Resources on Instance creation**
+   - [ ] Create Prefect deployment(s) for each flow type
+   - [ ] Store deployment IDs in extension table
+   - [ ] Register with external systems (MLflow, EvidentlyAI)
+8. [ ] **Implement status aggregation** if multi-flow Instance
+9. [ ] **Set up real-time subscriptions** via Centrifugo
 
 ## Reference Files
 
 - [Composition](references/composition.md) - Dataset composition pattern
 - [Examples](references/examples.md) - Complete Instance examples
 - [Scheduling](references/scheduling.md) - Schedule configuration
+- [Flow Pairing](references/flow-pairing.md) - Flow Execution Resource pairing

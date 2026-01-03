@@ -5,11 +5,13 @@ from uuid import UUID
 
 from fastapi import HTTPException
 
+
 def encode_cursor(created_at: datetime, item_id: UUID) -> str:
     timestamp = created_at
     if timestamp.tzinfo is None:
         timestamp = timestamp.replace(tzinfo=timezone.utc)
     return f"{timestamp.isoformat()}|{item_id}"
+
 
 def decode_cursor(cursor: str) -> tuple[datetime, UUID]:
     if "|" not in cursor:

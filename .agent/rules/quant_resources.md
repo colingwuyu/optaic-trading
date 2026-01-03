@@ -9,14 +9,41 @@ Guide for implementing domain resources in OptAIC's resource-based architecture.
 
 ## 1. Three-Tier Resource Model
 
-`
+```
 Definition (Plugin)         Instance (Config)              Run (Execution)
 -------------------        ------------------             ----------------
 BloombergPipelineDef   ->  SPX_OHLCV_Dataset          ->  PipelineRun
 PortfolioOptimizerDef  ->  MVO_Conservative           ->  PortfolioOptimizationRun
 MLModuleDef            ->  XGBoost_Predictor          ->  TrainingRun, InferenceRun
 (none)                 ->  BacktestInstance           ->  BacktestRun
-`
+```
+
+## 1a. Flow Execution Resources (CRITICAL)
+
+**Flow Execution Resources are distinct from Runs.**
+
+| Concept | Type | Created When | Example |
+|---------|------|--------------|---------|
+| Flow Execution Resource | Static | Instance created | Prefect Deployment |
+| Run | Dynamic | Flow triggered | Prefect Flow Run |
+
+```
+Instance creation:
+├── Create Resource + extension table
+├── Create Flow Execution Resource(s)   ← Static capability
+│   ├── Prefect deployment(s)
+│   ├── MLflow experiment (for models)
+│   └── EvidentlyAI project (for monitoring)
+└── Store handles in Instance extension table
+
+Run trigger:
+├── Check upstream freshness (flow-to-flow lineage)
+├── Create Run resource record          ← Dynamic activity
+├── Submit to orchestrator
+└── Track status, metrics, outputs
+```
+
+**Key Pattern**: When implementing Instance creation, ALWAYS also create Flow Execution Resources.
 
 ## 2. Resource Type Summary
 
@@ -46,6 +73,51 @@ PipelineRun, ExperimentRun, BacktestRun, PortfolioOptimizationRun, TrainingRun, 
 3. **Guardrails hooks** - Validate at lifecycle gates
 4. **Version tracking** - Instances reference definition versions
 5. **code_ref linkage** - Services bridge DB models to factories via Definition.code_ref
+6. **Flow Execution Pairing** - Instance creation MUST create Flow Execution Resources
+7. **Lineage is Flow-to-Flow** - Dependencies track flow statuses, not instance relationships
+8. **Status Aggregation** - Instance status aggregates from its Flow(s)
+9. **Real-Time Updates** - Flow status changes publish to Centrifugo channels
+
+## 4a. Lineage Checking Before Execution
+
+Before triggering a Run, check upstream freshness:
+
+```python
+from libs.orchestration import (
+    LineageResolver, FreshnessChecker, UpstreamNotReadyError
+)
+
+async def trigger_pipeline_run(session, actor, dataset_id, force=False):
+    resolver = LineageResolver()
+    checker = FreshnessChecker(status_store)
+
+    # Check upstream freshness
+    report = await resolver.check_upstream_freshness(
+        session, dataset_id, checker
+    )
+
+    if not report.all_ready and not force:
+        raise UpstreamNotReadyError(
+            f"{len(report.blocking_resources)} upstream(s) not ready",
+            blocking_resources=report.blocking_resources,
+        )
+
+    # Proceed with Run creation
+    ...
+```
+
+## 4b. Status Flow
+
+```
+Instance.status = aggregate(flow.statuses)
+
+DatasetStatus enum:
+├── NOT_INITIALIZED  (no data exists)
+├── READY           (current and valid)
+├── STALE           (outdated, needs refresh)
+├── STALE_SOURCE_DELAYED (source has no new data)
+└── ERROR           (pipeline failed)
+```
 
 ## 5. code_ref Integration
 

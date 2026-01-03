@@ -33,7 +33,9 @@ async def main() -> None:
         history = await client.chat.list_messages(channel_id, limit=10)
         print("history_count:", len(history["items"]))
 
-        edited = await client.chat.edit_message(message_id, "Hello from the SDK (edited)")
+        edited = await client.chat.edit_message(
+            message_id, "Hello from the SDK (edited)"
+        )
         print("edited_at:", edited["edited_at"])
 
         deleted = await client.chat.delete_message(message_id)

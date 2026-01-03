@@ -389,6 +389,11 @@ class DatasetInstance(Base):
     Composed dataset instance.
 
     Composes Pipeline + Store + Accessor into a unified data asset.
+
+    External system registration:
+    - prefect_deployment_id: Prefect Deployment for scheduled/triggered runs
+    - When Instance is created, a Prefect Deployment is registered
+    - Each PipelineRun creates a Prefect Flow Run under this deployment
     """
 
     __tablename__ = "dataset_instances"
@@ -402,6 +407,11 @@ class DatasetInstance(Base):
     pipeline_instance_id: Mapped[UUID] = mapped_column(ForeignKey("resources.id"))
     store_instance_id: Mapped[UUID] = mapped_column(ForeignKey("resources.id"))
     accessor_instance_id: Mapped[UUID] = mapped_column(ForeignKey("resources.id"))
+
+    # External system registration (Instance = Registration Point)
+    prefect_deployment_id: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )  # Prefect Deployment ID for scheduled runs
 
     # Freshness tracking
     freshness_status: Mapped[str] = mapped_column(
@@ -419,6 +429,53 @@ class DatasetInstance(Base):
 
     __table_args__ = (
         Index("ix_dataset_inst_tenant_freshness", "tenant_id", "freshness_status"),
+    )
+
+
+class DatasetStatus(Base):
+    """
+    Execution status tracking for dataset instances.
+
+    Stores pipeline execution metadata for freshness tracking and
+    orchestration decisions. Used by StatusStore.
+    """
+
+    __tablename__ = "dataset_status"
+
+    dataset_id: Mapped[UUID] = mapped_column(
+        ForeignKey("resources.id"), primary_key=True
+    )
+    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
+
+    # Pipeline execution tracking
+    last_pipeline_run: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_pipeline_status: Mapped[Optional[str]] = mapped_column(
+        String(32), nullable=True
+    )  # running, success, error, empty
+
+    # Data freshness
+    last_data_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    rows_processed: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+
+    # Source monitoring
+    last_source_check: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    source_delay_detected: Mapped[bool] = mapped_column(
+        default=False, server_default=text("0")
+    )
+
+    # Error tracking
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        Index("ix_dataset_status_tenant_status", "tenant_id", "last_pipeline_status"),
     )
 
 
@@ -488,6 +545,18 @@ class ExperimentInstance(Base):
 class ModelInstance(Base):
     """
     Configured ML model instance.
+
+    External system registration:
+    - mlflow_experiment_id: MLflow Experiment for all training runs
+    - mlflow_registered_model_name: MLflow Model Registry name (after promotion)
+    - evidently_project_id: EvidentlyAI Project for monitoring
+
+    Lifecycle:
+    1. Instance created → MLflow Experiment registered
+    2. TrainingRun created → MLflow Run under the Experiment
+    3. Model promoted → Registered in MLflow Model Registry
+    4. Monitoring enabled → Evidently Project created
+    5. MonitoringRun → Evidently Report under the Project
     """
 
     __tablename__ = "model_instances"
@@ -504,6 +573,17 @@ class ModelInstance(Base):
 
     config_json: Mapped[dict] = mapped_column(JSONType, default=dict)
     artifact_path: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
+
+    # External system registration (Instance = Registration Point)
+    mlflow_experiment_id: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )  # MLflow Experiment ID for training runs
+    mlflow_registered_model_name: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )  # MLflow Model Registry name (after promotion)
+    evidently_project_id: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )  # EvidentlyAI Project ID for monitoring
 
     # Training dataset reference
     training_dataset_id: Mapped[Optional[UUID]] = mapped_column(
@@ -600,6 +680,151 @@ class BacktestInstance(Base):
 # =============================================================================
 # RUN RESOURCES (Execution Records)
 # =============================================================================
+
+
+class PipelineRun(Base):
+    """
+    Pipeline execution run for dataset refresh.
+
+    Tracks execution of a DatasetInstance's pipeline, including:
+    - Mode: "overwrite" (full history) or "incremental" (append)
+    - Results: rows processed, date range, timing
+    - Lineage: which versions of upstream datasets were used
+    """
+
+    __tablename__ = "pipeline_runs"
+
+    resource_id: Mapped[UUID] = mapped_column(
+        ForeignKey("resources.id", ondelete="CASCADE"), primary_key=True
+    )
+    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
+
+    # Parent reference (DatasetInstance)
+    dataset_instance_id: Mapped[UUID] = mapped_column(
+        ForeignKey("resources.id"), index=True
+    )
+
+    # Execution mode
+    mode: Mapped[str] = mapped_column(
+        String(32), default="overwrite"
+    )  # overwrite/incremental
+
+    # Orchestrator tracking
+    orchestrator_kind: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    orchestrator_run_id: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
+    orchestrator_meta_json: Mapped[Optional[dict]] = mapped_column(
+        JSONType, nullable=True
+    )
+
+    # Results
+    rows_processed: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    start_data_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    end_data_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+
+    # Timing (in milliseconds)
+    extract_duration_ms: Mapped[Optional[int]] = mapped_column(
+        BigInteger, nullable=True
+    )
+    transform_duration_ms: Mapped[Optional[int]] = mapped_column(
+        BigInteger, nullable=True
+    )
+    load_duration_ms: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+
+    # Status
+    status: Mapped[str] = mapped_column(
+        String(32), default="queued"
+    )  # queued/running/completed/failed/cancelled
+    error_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Lineage (versions of upstream datasets used)
+    input_versions_json: Mapped[Optional[dict]] = mapped_column(JSONType, nullable=True)
+
+    # Timing
+    started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    finished_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+    __table_args__ = (
+        Index("ix_pipeline_runs_tenant_dataset", "tenant_id", "dataset_instance_id"),
+        Index("ix_pipeline_runs_status", "status"),
+    )
+
+
+class ExperimentRun(Base):
+    """
+    Expression evaluation run (preview API).
+
+    Tracks execution of an ExperimentInstance's expression, including:
+    - Expression evaluated
+    - Input datasets used (with versions)
+    - Output data reference or preview
+    """
+
+    __tablename__ = "experiment_runs"
+
+    resource_id: Mapped[UUID] = mapped_column(
+        ForeignKey("resources.id", ondelete="CASCADE"), primary_key=True
+    )
+    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
+
+    # Parent reference (ExperimentInstance)
+    experiment_instance_id: Mapped[UUID] = mapped_column(
+        ForeignKey("resources.id"), index=True
+    )
+
+    # Expression executed
+    expression_text: Mapped[str] = mapped_column(Text)
+
+    # Input datasets used (with versions)
+    input_versions_json: Mapped[Optional[dict]] = mapped_column(JSONType, nullable=True)
+
+    # Date range evaluated
+    start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    as_of_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)  # PIT
+
+    # Orchestrator tracking
+    orchestrator_kind: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    orchestrator_run_id: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
+
+    # Status
+    status: Mapped[str] = mapped_column(String(32), default="queued")
+
+    # Results
+    result_columns: Mapped[Optional[list]] = mapped_column(JSONType, nullable=True)
+    row_count: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    result_preview_json: Mapped[Optional[dict]] = mapped_column(
+        JSONType, nullable=True
+    )  # First N rows for preview
+
+    # Timing
+    started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    finished_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_experiment_runs_tenant_experiment",
+            "tenant_id",
+            "experiment_instance_id",
+        ),
+    )
 
 
 class BacktestRun(Base):

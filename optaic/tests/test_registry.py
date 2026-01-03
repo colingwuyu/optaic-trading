@@ -131,7 +131,9 @@ def test_jsonschema_validator_ok() -> None:
     instance = ContractInstance(
         ref=ref,
         config_json='{"columns": ["id", "name", "value"], "nullable": false}',
-        contract_hash=contract_hash(ref, '{"columns": ["id", "name", "value"], "nullable": false}'),
+        contract_hash=contract_hash(
+            ref, '{"columns": ["id", "name", "value"], "nullable": false}'
+        ),
     )
 
     # Validate config
@@ -248,12 +250,16 @@ def test_validate_bundle_runs_default_validator() -> None:
     )
 
     # Create contracts
-    ref1 = ContractRef(contract_kind="schema", contract_name="test_schema", version="1.0.0")
-    ref2 = ContractRef(contract_kind="invariant", contract_name="test_invariant", version="1.0.0")
+    ref1 = ContractRef(
+        contract_kind="schema", contract_name="test_schema", version="1.0.0"
+    )
+    ref2 = ContractRef(
+        contract_kind="invariant", contract_name="test_invariant", version="1.0.0"
+    )
 
     instance1 = ContractInstance(
         ref=ref1,
-        config_json='{}',  # Missing required "name"
+        config_json="{}",  # Missing required "name"
         contract_hash=contract_hash(ref1, "{}"),
     )
     instance2 = ContractInstance(

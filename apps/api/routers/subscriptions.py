@@ -32,11 +32,17 @@ async def create_subscription(
         examples={
             "resource": {
                 "summary": "Subscribe to resource",
-                "value": {"resource_id": "11111111-1111-1111-1111-111111111111", "scope": "resource"},
+                "value": {
+                    "resource_id": "11111111-1111-1111-1111-111111111111",
+                    "scope": "resource",
+                },
             },
             "descendants": {
                 "summary": "Subscribe to descendants",
-                "value": {"resource_id": "11111111-1111-1111-1111-111111111111", "scope": "descendants"},
+                "value": {
+                    "resource_id": "11111111-1111-1111-1111-111111111111",
+                    "scope": "descendants",
+                },
             },
         },
     ),
@@ -116,7 +122,10 @@ async def revoke_subscription(
         resource_id=resource_id,
         resource_type=resource_type,
         action="subscription.revoked",
-        payload={"subscription_id": str(subscription_id), "resource_id": str(resource_id)},
+        payload={
+            "subscription_id": str(subscription_id),
+            "resource_id": str(resource_id),
+        },
     )
     revoked, _activity = await tx_activity(db, envelope, domain_fn)
     return SubscriptionOut.model_validate(revoked)

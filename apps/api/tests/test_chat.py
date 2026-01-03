@@ -100,8 +100,7 @@ async def test_chat_actions_write_activity_and_outbox():
                 select(Outbox).where(
                     Outbox.tenant_id == tenant_id,
                     Outbox.topic == "activity",
-                    Outbox.payload["resource"]["resource_id"].as_string()
-                    == channel_id,
+                    Outbox.payload["resource"]["resource_id"].as_string() == channel_id,
                 )
             )
         ).all()

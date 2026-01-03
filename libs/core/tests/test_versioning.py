@@ -68,7 +68,12 @@ async def test_version_chain_updates_head(db_session):
         db_session,
         resource_id,
         parents=[head.id],
-        content={"pipeline_refs": ["pipe:v2"], "store_refs": [], "accessor_refs": [], "config": {"v": 2}},
+        content={
+            "pipeline_refs": ["pipe:v2"],
+            "store_refs": [],
+            "accessor_refs": [],
+            "config": {"v": 2},
+        },
         created_by=actor_id,
     )
     await update_ref(db_session, resource_id, "main", next_version.id, actor_id)

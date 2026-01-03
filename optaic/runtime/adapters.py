@@ -12,25 +12,21 @@ class OrchestratorAdapter(Protocol):
         entrypoint: str,
         parameters: dict[str, Any],
         schedule: dict[str, Any] | None = None,
-    ) -> str:
-        ...
+    ) -> str: ...
 
-    def get_run_status(self, flow_run_id: str) -> str:
-        ...
+    def get_run_status(self, flow_run_id: str) -> str: ...
 
 
 class RegistryAdapter(Protocol):
-    def start_run(self, tags: dict[str, str] | None = None) -> str:
-        ...
+    def start_run(self, tags: dict[str, str] | None = None) -> str: ...
 
-    def log_metrics(self, metrics: Mapping[str, float], *, step: int | None = None) -> None:
-        ...
+    def log_metrics(
+        self, metrics: Mapping[str, float], *, step: int | None = None
+    ) -> None: ...
 
-    def log_artifacts(self, local_dir: str) -> None:
-        ...
+    def log_artifacts(self, local_dir: str) -> None: ...
 
-    def register_model(self, model_name: str, model_uri: str) -> str:
-        ...
+    def register_model(self, model_name: str, model_uri: str) -> str: ...
 
 
 class PrefectOrchestrator:
@@ -51,7 +47,9 @@ class PrefectOrchestrator:
         _ = run_id
         _ = schedule
         state = run_deployment(entrypoint, parameters=parameters)
-        flow_run_id = getattr(getattr(state, "state_details", None), "flow_run_id", None)
+        flow_run_id = getattr(
+            getattr(state, "state_details", None), "flow_run_id", None
+        )
         if flow_run_id:
             return str(flow_run_id)
         return ""
@@ -87,7 +85,9 @@ class MLflowRegistry:
         self._run_id = run.info.run_id
         return self._run_id
 
-    def log_metrics(self, metrics: Mapping[str, float], *, step: int | None = None) -> None:
+    def log_metrics(
+        self, metrics: Mapping[str, float], *, step: int | None = None
+    ) -> None:
         import mlflow
 
         if self.tracking_uri:
@@ -116,5 +116,7 @@ def _run_async(coro: Any) -> Any:
     except RuntimeError:
         return asyncio.run(coro)
     if loop.is_running():
-        raise RuntimeError("Cannot run async Prefect client inside an active event loop.")
+        raise RuntimeError(
+            "Cannot run async Prefect client inside an active event loop."
+        )
     return loop.run_until_complete(coro)

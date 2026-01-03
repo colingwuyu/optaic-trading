@@ -24,6 +24,7 @@ from typing import NamedTuple
 
 class ImportViolation(NamedTuple):
     """A forbidden import violation."""
+
     file: Path
     line: int
     module: str
@@ -82,12 +83,14 @@ def check_file(file_path: Path, forbidden: set[str]) -> list[ImportViolation]:
 
     for lineno, module in visitor.imports:
         if module in forbidden:
-            violations.append(ImportViolation(
-                file=file_path,
-                line=lineno,
-                module=module,
-                reason=f"Forbidden top-level import of '{module}'",
-            ))
+            violations.append(
+                ImportViolation(
+                    file=file_path,
+                    line=lineno,
+                    module=module,
+                    reason=f"Forbidden top-level import of '{module}'",
+                )
+            )
 
     return violations
 
@@ -113,21 +116,25 @@ def check_lazy_imports(file_path: Path, heavy_deps: set[str]) -> list[ImportViol
                 for alias in node.names:
                     root = alias.name.split(".")[0]
                     if root in heavy_deps:
-                        violations.append(ImportViolation(
+                        violations.append(
+                            ImportViolation(
+                                file=file_path,
+                                line=node.lineno,
+                                module=root,
+                                reason=f"'{root}' must be imported inside functions, not at top-level",
+                            )
+                        )
+            elif node.module:
+                root = node.module.split(".")[0]
+                if root in heavy_deps:
+                    violations.append(
+                        ImportViolation(
                             file=file_path,
                             line=node.lineno,
                             module=root,
                             reason=f"'{root}' must be imported inside functions, not at top-level",
-                        ))
-            elif node.module:
-                root = node.module.split(".")[0]
-                if root in heavy_deps:
-                    violations.append(ImportViolation(
-                        file=file_path,
-                        line=node.lineno,
-                        module=root,
-                        reason=f"'{root}' must be imported inside functions, not at top-level",
-                    ))
+                        )
+                    )
 
     return violations
 

@@ -163,6 +163,7 @@ def _is_process_alive(pid: int) -> bool:
     if sys.platform == "win32":
         try:
             import ctypes
+
             kernel32 = ctypes.windll.kernel32
             PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
             handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
@@ -371,4 +372,3 @@ def runtime_status_to_dict(status: RuntimeStatus) -> dict:
         "warnings": status.warnings,
         "checked_at": status.checked_at,
     }
-

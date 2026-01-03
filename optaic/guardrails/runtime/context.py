@@ -16,9 +16,21 @@ class GuardrailsContext(BaseModel):
     """
 
     tenant_id: UUID = Field(..., description="ID of the tenant")
-    actor_principal_id: UUID = Field(..., description="ID of the principal performing the action")
-    space_kind: Optional[str] = Field(None, description="Kind of the space (e.g., personal, team, system)")
-    subspace_kind: Optional[str] = Field(None, description="Kind of the subspace (e.g., official, staging)")
-    action: str = Field(..., description="The action being performed (e.g., create, update, promote)")
-    correlation_id: Optional[UUID] = Field(None, description="Correlation ID for tracing")
-    extra: Dict[str, Any] = Field(default_factory=dict, description="Additional context data")
+    actor_principal_id: UUID = Field(
+        ..., description="ID of the principal performing the action"
+    )
+    space_kind: Optional[str] = Field(
+        None, description="Kind of the space (e.g., personal, team, system)"
+    )
+    subspace_kind: Optional[str] = Field(
+        None, description="Kind of the subspace (e.g., official, staging)"
+    )
+    action: str = Field(
+        ..., description="The action being performed (e.g., create, update, promote)"
+    )
+    correlation_id: Optional[UUID] = Field(
+        None, description="Correlation ID for tracing"
+    )
+    extra: Dict[str, Any] = Field(
+        default_factory=dict, description="Additional context data"
+    )

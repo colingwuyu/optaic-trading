@@ -7,11 +7,13 @@ from libs.db.models.rbac import RoleBinding, RolePermission
 from libs.core.rbac import authorize, Permission
 from libs.db.session import AsyncSessionLocal
 
+
 @pytest.fixture
 async def db_session():
     async with AsyncSessionLocal() as session:
         yield session
         await session.rollback()
+
 
 async def _seed_tenant_and_principal(db, tenant_id, principal_id):
     await db.execute(insert(Tenant).values(id=tenant_id, name=f"T-{tenant_id.hex[:4]}"))
@@ -24,6 +26,7 @@ async def _seed_tenant_and_principal(db, tenant_id, principal_id):
             display_name=f"P-{principal_id.hex[:4]}",
         )
     )
+
 
 @pytest.mark.asyncio
 async def test_authorize_enforces_tenant_isolation(db_session):
@@ -78,6 +81,7 @@ async def test_authorize_enforces_tenant_isolation(db_session):
     assert explain["details"]["reason"] == "tenant_mismatch"
     assert explain["details"]["checked_scopes"] == [str(resource_id)]
     assert explain["details"]["binding"] is None
+
 
 @pytest.mark.asyncio
 async def test_authorize_inherits_from_parent_scope(db_session):
@@ -142,10 +146,8 @@ async def test_authorize_inherits_from_parent_scope(db_session):
     assert explain["inherited"] is True
     assert explain["details"]["checked_scopes"] == [str(child_id), str(parent_id)]
     assert explain["details"]["binding"]["id"] is not None
-    assert (
-        explain["details"]["permission"]["name"]
-        == Permission.RESOURCE_READ.value
-    )
+    assert explain["details"]["permission"]["name"] == Permission.RESOURCE_READ.value
+
 
 @pytest.mark.asyncio
 async def test_authorize_child_override_with_break(db_session):
@@ -209,6 +211,7 @@ async def test_authorize_child_override_with_break(db_session):
     assert allowed is False
     assert explain["details"]["reason"] == "binding_not_found"
     assert explain["details"]["checked_scopes"] == [str(child_id)]
+
 
 @pytest.mark.asyncio
 async def test_authorize_denies_when_no_binding(db_session):

@@ -89,10 +89,18 @@ class ParquetStore(BaseStore):
                 filters.append(ds.field(primary_key) <= pd.Timestamp(end_date))
 
         # Read with optional column selection and filtering
-        table = ds_obj.to_table(
-            columns=columns,
-            filter=ds.field("_").is_valid() if not filters else filters[0] if len(filters) == 1 else filters[0] & filters[1],
-        ) if filters else ds_obj.to_table(columns=columns)
+        table = (
+            ds_obj.to_table(
+                columns=columns,
+                filter=ds.field("_").is_valid()
+                if not filters
+                else filters[0]
+                if len(filters) == 1
+                else filters[0] & filters[1],
+            )
+            if filters
+            else ds_obj.to_table(columns=columns)
+        )
 
         df = table.to_pandas()
 
@@ -181,10 +189,7 @@ class ParquetStore(BaseStore):
                 partitioning="hive",
             )
             # Filter out partition columns (ending with _year)
-            return [
-                name for name in ds_obj.schema.names
-                if not name.endswith("_year")
-            ]
+            return [name for name in ds_obj.schema.names if not name.endswith("_year")]
         except Exception:
             return []
 

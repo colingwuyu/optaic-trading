@@ -49,10 +49,45 @@ Define schemas with `knowledge_date` field for PIT tracking.
 
 Heavy deps must be lazy-loaded using `TYPE_CHECKING` blocks.
 
-## 6. References
+## 6. Lineage and Freshness Checking
+
+Before executing a pipeline, check upstream freshness:
+
+```python
+from libs.orchestration import (
+    LineageResolver, FreshnessChecker, UpstreamNotReadyError
+)
+
+report = await resolver.check_upstream_freshness(
+    session, dataset_id, checker
+)
+if not report.all_ready:
+    raise UpstreamNotReadyError(...)
+```
+
+After successful execution, propagate staleness:
+
+```python
+await resolver.propagate_staleness(session, dataset_id)
+```
+
+## 7. UpdateFrequency Configuration
+
+```python
+from libs.orchestration import UpdateFrequency
+
+frequency = UpdateFrequency(
+    frequency="daily",           # daily, weekly, monthly, quarterly
+    business_days_only=True,     # Skip weekends
+    grace_period_days=1,         # Allow delay
+)
+```
+
+## 8. References
 
 See `.claude/skills/data-pipeline-patterns/` for complete patterns:
 - `SKILL.md` - Full pipeline implementation guide
 - `references/pit-patterns.md` - Point-in-time correctness
 - `references/prefect-patterns.md` - Orchestration integration
 - `references/quality-checks.md` - Data validation
+- `references/lineage-patterns.md` - Lineage and freshness

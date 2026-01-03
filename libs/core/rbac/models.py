@@ -3,6 +3,7 @@ from typing import Optional, Any, Dict
 from uuid import UUID
 from pydantic import BaseModel, Field
 
+
 class Permission(str, Enum):
     RESOURCE_READ = "RESOURCE_READ"
     RESOURCE_CREATE_CHILD = "RESOURCE_CREATE_CHILD"
@@ -33,13 +34,16 @@ class Permission(str, Enum):
     CHANNEL_MODERATE = "CHANNEL_MODERATE"
     CHANNEL_VIEW_HISTORY = "CHANNEL_VIEW_HISTORY"
 
+
 GLOBAL_RESOURCE_TYPE = "*"
+
 
 class ActorContext(BaseModel):
     id: UUID
     tenant_id: UUID
     traits: Dict[str, Any] = Field(default_factory=dict)
     kind: Optional[str] = None
+
 
 class DecisionExplanation(BaseModel):
     message: str
@@ -48,6 +52,7 @@ class DecisionExplanation(BaseModel):
     scope_resource_id: Optional[UUID] = None
     inherited: bool = False
     details: Dict[str, Any] = Field(default_factory=dict)
+
 
 class AuthzDecision(BaseModel):
     allowed: bool

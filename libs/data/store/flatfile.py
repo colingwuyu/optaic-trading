@@ -101,7 +101,9 @@ class FlatFileStore(BaseStore):
             raise ValueError(f"Unsupported flat file type: {suffix}")
 
         # Apply date filtering if possible
-        date_column = self.config.get("date_column") or self.config.get("primary_key", "date")
+        date_column = self.config.get("date_column") or self.config.get(
+            "primary_key", "date"
+        )
         if date_column in df.columns:
             df[date_column] = pd.to_datetime(df[date_column])
             df = df.set_index(date_column)
@@ -137,7 +139,9 @@ class FlatFileStore(BaseStore):
         """
         file_path_config = self.config.get("file_path") or self.config.get("file_name")
         if not file_path_config:
-            raise ValueError("FlatFileStore requires 'file_path' or 'file_name' in config")
+            raise ValueError(
+                "FlatFileStore requires 'file_path' or 'file_name' in config"
+            )
 
         # Handle absolute vs relative paths
         file_path = Path(file_path_config)

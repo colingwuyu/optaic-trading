@@ -33,7 +33,9 @@ class BundleCreateRequest(BaseModel):
 class BundleResponse(BaseModel):
     """Response containing a contract bundle."""
 
-    bundle: Optional[ContractBundle] = Field(None, description="The active bundle, if any")
+    bundle: Optional[ContractBundle] = Field(
+        None, description="The active bundle, if any"
+    )
 
 
 class ReportsListResponse(BaseModel):

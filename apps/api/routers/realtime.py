@@ -33,7 +33,9 @@ _CHANNEL_PREFIXES = {"u", "r", "c"}
 def _parse_channel(channel: str) -> Tuple[UUID, str, UUID]:
     parts = channel.split(":")
     if len(parts) != 4 or parts[0] != "t":
-        raise HTTPException(status_code=400, detail=f"Invalid channel format: {channel}")
+        raise HTTPException(
+            status_code=400, detail=f"Invalid channel format: {channel}"
+        )
 
     channel_type = parts[2]
     if channel_type not in _CHANNEL_PREFIXES:
@@ -43,14 +45,14 @@ def _parse_channel(channel: str) -> Tuple[UUID, str, UUID]:
         tenant_id = UUID(parts[1])
         target_id = UUID(parts[3])
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid channel format: {channel}") from exc
+        raise HTTPException(
+            status_code=400, detail=f"Invalid channel format: {channel}"
+        ) from exc
 
     return tenant_id, channel_type, target_id
 
 
-def _issue_token(
-    secret: str, payload: Dict[str, str], expires_at: datetime
-) -> str:
+def _issue_token(secret: str, payload: Dict[str, str], expires_at: datetime) -> str:
     claims = dict(payload)
     claims["exp"] = expires_at
     claims["iat"] = datetime.now(timezone.utc)

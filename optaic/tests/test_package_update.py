@@ -59,7 +59,7 @@ def test_write_package_update_state(tmp_path: Path) -> None:
     path = pu.write_package_update_state(tmp_path, result)
     content = path.read_text(encoding="utf-8")
     assert "package_updates.json" in str(path)
-    assert "\"latest_version\": \"1.1.0\"" in content
+    assert '"latest_version": "1.1.0"' in content
 
 
 def test_list_available_versions_parses_simple_index(monkeypatch) -> None:

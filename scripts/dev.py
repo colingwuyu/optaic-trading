@@ -157,15 +157,15 @@ def main() -> int:
             _start("agent", _python_cmd(["-m", "apps.agent.main"]), ROOT, env)
         )
         processes.append(
-                _start(
-                    "web",
-                    _npm_cmd(
-                        ["run", "dev", "--", "--host", "127.0.0.1", "--port", web_port]
-                    ),
-                    WEB_DIR,
-                    web_env,
-                )
+            _start(
+                "web",
+                _npm_cmd(
+                    ["run", "dev", "--", "--host", "127.0.0.1", "--port", web_port]
+                ),
+                WEB_DIR,
+                web_env,
             )
+        )
 
         while True:
             for proc in processes:

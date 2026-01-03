@@ -467,7 +467,11 @@ class TestBloombergPipeline:
         raw_data = pd.DataFrame(
             [[4500, 4510, 4520]],
             columns=pd.MultiIndex.from_tuples(
-                [("SPX Index", "PX_LAST"), ("SPX Index", "PX_OPEN"), ("SPX Index", "PX_HIGH")]
+                [
+                    ("SPX Index", "PX_LAST"),
+                    ("SPX Index", "PX_OPEN"),
+                    ("SPX Index", "PX_HIGH"),
+                ]
             ),
             index=pd.date_range("2024-01-01", periods=1),
         )

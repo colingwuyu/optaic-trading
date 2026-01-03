@@ -21,7 +21,11 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from libs.core.activity import ActivityEnvelope, record_activity_with_outbox, tx_activity
+from libs.core.activity import (
+    ActivityEnvelope,
+    record_activity_with_outbox,
+    tx_activity,
+)
 from libs.core.rbac.models import ActorContext
 from libs.data.expression import ExpressionEngine
 from libs.db.models.quant import (
@@ -102,7 +106,9 @@ class ExperimentService:
                 resource_id=resource_id,
                 tenant_id=actor.tenant_id,
                 expression_text=expression,
-                input_datasets_json={k: str(v) for k, v in (input_datasets or {}).items()},
+                input_datasets_json={
+                    k: str(v) for k, v in (input_datasets or {}).items()
+                },
             )
             sess.add(instance)
             await sess.flush()
@@ -205,7 +211,9 @@ class ExperimentService:
         await session.commit()
 
         # Convert result to response
-        return self._result_to_response(result, resource.name, instance.expression_text, limit)
+        return self._result_to_response(
+            result, resource.name, instance.expression_text, limit
+        )
 
     async def save_as_macro(
         self,
@@ -313,8 +321,12 @@ class ExperimentService:
 
         # Extract expression metadata
         try:
-            datasets_referenced = self.expression_engine.validate_expression(instance.expression_text)
-            operators_used = self.expression_engine.get_used_operators(instance.expression_text)
+            datasets_referenced = self.expression_engine.validate_expression(
+                instance.expression_text
+            )
+            operators_used = self.expression_engine.get_used_operators(
+                instance.expression_text
+            )
         except Exception:
             datasets_referenced = []
             operators_used = []
@@ -370,7 +382,9 @@ class ExperimentService:
             {
                 "id": str(resource.id),
                 "name": resource.name,
-                "expression": instance.expression_text[:100] + "..." if len(instance.expression_text) > 100 else instance.expression_text,
+                "expression": instance.expression_text[:100] + "..."
+                if len(instance.expression_text) > 100
+                else instance.expression_text,
                 "created_at": resource.created_at.isoformat(),
             }
             for resource, instance in rows
@@ -420,7 +434,9 @@ class ExperimentService:
                 "old": instance.input_datasets_json,
                 "new": {k: str(v) for k, v in input_datasets.items()},
             }
-            instance.input_datasets_json = {k: str(v) for k, v in input_datasets.items()}
+            instance.input_datasets_json = {
+                k: str(v) for k, v in input_datasets.items()
+            }
 
         if changes:
             await session.flush()

@@ -57,6 +57,7 @@ def _is_sqlite_url(url: str | None) -> bool:
     except Exception:
         return url.startswith("sqlite")
 
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
     url = config.get_main_option("sqlalchemy.url")
@@ -72,6 +73,7 @@ def run_migrations_offline() -> None:
     with context.begin_transaction():
         context.run_migrations()
 
+
 def do_run_migrations(connection) -> None:
     is_sqlite = connection.dialect.name == "sqlite"
     context.configure(
@@ -82,6 +84,7 @@ def do_run_migrations(connection) -> None:
 
     with context.begin_transaction():
         context.run_migrations()
+
 
 async def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
@@ -104,6 +107,7 @@ async def run_migrations_online() -> None:
         await connection.run_sync(do_run_migrations)
 
     await connectable.dispose()
+
 
 if context.is_offline_mode():
     run_migrations_offline()

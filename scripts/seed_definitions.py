@@ -156,24 +156,109 @@ BUILT_IN_ACCESSORS: list[dict[str, Any]] = [
 # Operators from OPS_REGISTRY
 BUILT_IN_OPS: list[dict[str, Any]] = [
     # Time Series
-    {"name": "REF", "code_ref": "REF", "category": "time_series", "signature": "REF(data, n=1)"},
-    {"name": "DELTA", "code_ref": "DELTA", "category": "time_series", "signature": "DELTA(data, n=1)"},
-    {"name": "TS_CONCAT", "code_ref": "TS_CONCAT", "category": "time_series", "signature": "TS_CONCAT(*args)"},
-    {"name": "TS_RANK", "code_ref": "TS_RANK", "category": "time_series", "signature": "TS_RANK(data, window)"},
-    {"name": "TS_ZSCORE", "code_ref": "TS_ZSCORE", "category": "time_series", "signature": "TS_ZSCORE(data, window)"},
-    {"name": "TS_SUM", "code_ref": "TS_SUM", "category": "time_series", "signature": "TS_SUM(data, window)"},
-    {"name": "TS_PRODUCT", "code_ref": "TS_PRODUCT", "category": "time_series", "signature": "TS_PRODUCT(data, window)"},
-    {"name": "TS_ARGMAX", "code_ref": "TS_ARGMAX", "category": "time_series", "signature": "TS_ARGMAX(data, window)"},
-    {"name": "TS_ARGMIN", "code_ref": "TS_ARGMIN", "category": "time_series", "signature": "TS_ARGMIN(data, window)"},
-    {"name": "DECAY_LINEAR", "code_ref": "DECAY_LINEAR", "category": "time_series", "signature": "DECAY_LINEAR(data, window)"},
-    {"name": "DECAY_EXP", "code_ref": "DECAY_EXP", "category": "time_series", "signature": "DECAY_EXP(data, halflife)"},
+    {
+        "name": "REF",
+        "code_ref": "REF",
+        "category": "time_series",
+        "signature": "REF(data, n=1)",
+    },
+    {
+        "name": "DELTA",
+        "code_ref": "DELTA",
+        "category": "time_series",
+        "signature": "DELTA(data, n=1)",
+    },
+    {
+        "name": "TS_CONCAT",
+        "code_ref": "TS_CONCAT",
+        "category": "time_series",
+        "signature": "TS_CONCAT(*args)",
+    },
+    {
+        "name": "TS_RANK",
+        "code_ref": "TS_RANK",
+        "category": "time_series",
+        "signature": "TS_RANK(data, window)",
+    },
+    {
+        "name": "TS_ZSCORE",
+        "code_ref": "TS_ZSCORE",
+        "category": "time_series",
+        "signature": "TS_ZSCORE(data, window)",
+    },
+    {
+        "name": "TS_SUM",
+        "code_ref": "TS_SUM",
+        "category": "time_series",
+        "signature": "TS_SUM(data, window)",
+    },
+    {
+        "name": "TS_PRODUCT",
+        "code_ref": "TS_PRODUCT",
+        "category": "time_series",
+        "signature": "TS_PRODUCT(data, window)",
+    },
+    {
+        "name": "TS_ARGMAX",
+        "code_ref": "TS_ARGMAX",
+        "category": "time_series",
+        "signature": "TS_ARGMAX(data, window)",
+    },
+    {
+        "name": "TS_ARGMIN",
+        "code_ref": "TS_ARGMIN",
+        "category": "time_series",
+        "signature": "TS_ARGMIN(data, window)",
+    },
+    {
+        "name": "DECAY_LINEAR",
+        "code_ref": "DECAY_LINEAR",
+        "category": "time_series",
+        "signature": "DECAY_LINEAR(data, window)",
+    },
+    {
+        "name": "DECAY_EXP",
+        "code_ref": "DECAY_EXP",
+        "category": "time_series",
+        "signature": "DECAY_EXP(data, halflife)",
+    },
     # Statistics
-    {"name": "MEAN", "code_ref": "MEAN", "category": "statistics", "signature": "MEAN(data, window)"},
-    {"name": "STD", "code_ref": "STD", "category": "statistics", "signature": "STD(data, window)"},
-    {"name": "CORR", "code_ref": "CORR", "category": "statistics", "signature": "CORR(x, y, window)"},
-    {"name": "BETA", "code_ref": "BETA", "category": "statistics", "signature": "BETA(y, x, window)"},
-    {"name": "MAX", "code_ref": "MAX", "category": "statistics", "signature": "MAX(data, window)"},
-    {"name": "MIN", "code_ref": "MIN", "category": "statistics", "signature": "MIN(data, window)"},
+    {
+        "name": "MEAN",
+        "code_ref": "MEAN",
+        "category": "statistics",
+        "signature": "MEAN(data, window)",
+    },
+    {
+        "name": "STD",
+        "code_ref": "STD",
+        "category": "statistics",
+        "signature": "STD(data, window)",
+    },
+    {
+        "name": "CORR",
+        "code_ref": "CORR",
+        "category": "statistics",
+        "signature": "CORR(x, y, window)",
+    },
+    {
+        "name": "BETA",
+        "code_ref": "BETA",
+        "category": "statistics",
+        "signature": "BETA(y, x, window)",
+    },
+    {
+        "name": "MAX",
+        "code_ref": "MAX",
+        "category": "statistics",
+        "signature": "MAX(data, window)",
+    },
+    {
+        "name": "MIN",
+        "code_ref": "MIN",
+        "category": "statistics",
+        "signature": "MIN(data, window)",
+    },
     # Math
     {"name": "LOG", "code_ref": "LOG", "category": "math", "signature": "LOG(data)"},
     {"name": "ABS", "code_ref": "ABS", "category": "math", "signature": "ABS(data)"},
@@ -182,15 +267,50 @@ BUILT_IN_OPS: list[dict[str, Any]] = [
     {"name": "SUB", "code_ref": "SUB", "category": "math", "signature": "SUB(a, b)"},
     {"name": "MUL", "code_ref": "MUL", "category": "math", "signature": "MUL(a, b)"},
     {"name": "DIV", "code_ref": "DIV", "category": "math", "signature": "DIV(a, b)"},
-    {"name": "CUMRET", "code_ref": "CUMRET", "category": "math", "signature": "CUMRET(returns)"},
-    {"name": "COMBINE", "code_ref": "COMBINE", "category": "math", "signature": "COMBINE(*args)"},
+    {
+        "name": "CUMRET",
+        "code_ref": "CUMRET",
+        "category": "math",
+        "signature": "CUMRET(returns)",
+    },
+    {
+        "name": "COMBINE",
+        "code_ref": "COMBINE",
+        "category": "math",
+        "signature": "COMBINE(*args)",
+    },
     # PIT
-    {"name": "VALUES", "code_ref": "VALUES", "category": "pit", "signature": "VALUES(data, col='value')"},
-    {"name": "DROP_META", "code_ref": "DROP_META", "category": "pit", "signature": "DROP_META(data)"},
-    {"name": "AS_OF_DATE", "code_ref": "AS_OF_DATE", "category": "pit", "signature": "AS_OF_DATE(data, as_of)"},
+    {
+        "name": "VALUES",
+        "code_ref": "VALUES",
+        "category": "pit",
+        "signature": "VALUES(data, col='value')",
+    },
+    {
+        "name": "DROP_META",
+        "code_ref": "DROP_META",
+        "category": "pit",
+        "signature": "DROP_META(data)",
+    },
+    {
+        "name": "AS_OF_DATE",
+        "code_ref": "AS_OF_DATE",
+        "category": "pit",
+        "signature": "AS_OF_DATE(data, as_of)",
+    },
     # Futures
-    {"name": "ROLL_FUTURES", "code_ref": "ROLL_FUTURES", "category": "futures", "signature": "ROLL_FUTURES(contracts, roll_days=5)"},
-    {"name": "FUTURES_UNIVERSE", "code_ref": "FUTURES_UNIVERSE", "category": "futures", "signature": "FUTURES_UNIVERSE(root, include_expired=False)"},
+    {
+        "name": "ROLL_FUTURES",
+        "code_ref": "ROLL_FUTURES",
+        "category": "futures",
+        "signature": "ROLL_FUTURES(contracts, roll_days=5)",
+    },
+    {
+        "name": "FUTURES_UNIVERSE",
+        "code_ref": "FUTURES_UNIVERSE",
+        "category": "futures",
+        "signature": "FUTURES_UNIVERSE(root, include_expired=False)",
+    },
 ]
 
 
@@ -199,7 +319,9 @@ BUILT_IN_OPS: list[dict[str, Any]] = [
 # =============================================================================
 
 
-async def _resource_exists(session: AsyncSession, tenant_id: UUID, name: str, resource_type: str) -> UUID | None:
+async def _resource_exists(
+    session: AsyncSession, tenant_id: UUID, name: str, resource_type: str
+) -> UUID | None:
     """Check if a resource with given name and type already exists."""
     stmt = select(Resource).where(
         Resource.tenant_id == tenant_id,
@@ -395,6 +517,7 @@ async def seed_all_definitions(session: AsyncSession) -> dict[str, int]:
 async def main() -> None:
     """Run seeding."""
     import structlog
+
     structlog.configure(
         processors=[
             structlog.dev.ConsoleRenderer(),

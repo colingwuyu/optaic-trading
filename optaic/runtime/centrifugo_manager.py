@@ -108,7 +108,9 @@ def ensure_centrifugo_binary(version: str, data_dir: Path) -> Path:
     if target.exists():
         return target
 
-    legacy = data_dir / "bin" / f"centrifugo-{version}{'.exe' if os.name == 'nt' else ''}"
+    legacy = (
+        data_dir / "bin" / f"centrifugo-{version}{'.exe' if os.name == 'nt' else ''}"
+    )
     if legacy.exists():
         shutil.copy2(legacy, target)
         return target
@@ -145,7 +147,11 @@ def write_centrifugo_config(config: CentrifugoConfig) -> Path:
     payload = {
         "http_server": {"address": config.host, "port": config.port},
         "engine": engine,
-        "http_api": {"key": config.api_key, "handler_prefix": "/api", "disabled": False},
+        "http_api": {
+            "key": config.api_key,
+            "handler_prefix": "/api",
+            "disabled": False,
+        },
         "client": {
             "allowed_origins": config.allowed_origins,
             "token": {"hmac_secret_key": config.token_secret},
@@ -198,9 +204,7 @@ def _sha256(path: Path) -> str:
 def _verify_checksum(expected: str, archive_path: Path) -> None:
     actual = _sha256(archive_path)
     if actual.lower() != expected.lower():
-        raise RuntimeError(
-            f"Centrifugo checksum mismatch: {actual} != {expected}"
-        )
+        raise RuntimeError(f"Centrifugo checksum mismatch: {actual} != {expected}")
 
 
 def _extract_binary(

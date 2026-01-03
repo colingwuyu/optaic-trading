@@ -25,12 +25,16 @@ class ResourceContractBundle(Base):
     resource_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     resource_version_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_by: Mapped[str] = mapped_column(String(255), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow
+    )
     bundle_json: Mapped[str] = mapped_column(Text(), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean(), nullable=False, default=True)
 
     __table_args__ = (
-        Index("ix_resource_contract_bundles_resource_active", "resource_id", "is_active"),
+        Index(
+            "ix_resource_contract_bundles_resource_active", "resource_id", "is_active"
+        ),
     )
 
 
@@ -48,10 +52,17 @@ class ValidationReportRecord(Base):
     ok: Mapped[bool] = mapped_column(Boolean(), nullable=False)
     enforced_as: Mapped[str] = mapped_column(String(20), nullable=False)
     created_by: Mapped[str] = mapped_column(String(255), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow
+    )
     correlation_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     report_json: Mapped[str] = mapped_column(Text(), nullable=False)
 
     __table_args__ = (
-        Index("ix_validation_reports_scope_target_created", "scope", "target_id", "created_at"),
+        Index(
+            "ix_validation_reports_scope_target_created",
+            "scope",
+            "target_id",
+            "created_at",
+        ),
     )

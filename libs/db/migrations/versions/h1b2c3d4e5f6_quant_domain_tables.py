@@ -273,6 +273,8 @@ def upgrade() -> None:
         sa.Column("pipeline_instance_id", sa.Uuid(), nullable=False),
         sa.Column("store_instance_id", sa.Uuid(), nullable=False),
         sa.Column("accessor_instance_id", sa.Uuid(), nullable=False),
+        # External system registration (Instance = Registration Point)
+        sa.Column("prefect_deployment_id", sa.String(255), nullable=True),
         sa.Column(
             "freshness_status", sa.String(32), nullable=False, server_default="unknown"
         ),
@@ -344,6 +346,10 @@ def upgrade() -> None:
         sa.Column("definition_version_id", sa.Uuid(), nullable=True),
         sa.Column("config_json", sa.JSON(), nullable=False, server_default="{}"),
         sa.Column("artifact_path", sa.String(1024), nullable=True),
+        # External system registration (Instance = Registration Point)
+        sa.Column("mlflow_experiment_id", sa.String(255), nullable=True),
+        sa.Column("mlflow_registered_model_name", sa.String(255), nullable=True),
+        sa.Column("evidently_project_id", sa.String(255), nullable=True),
         sa.Column("training_dataset_id", sa.Uuid(), nullable=True),
         sa.Column("last_trained_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),

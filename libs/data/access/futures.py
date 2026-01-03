@@ -480,8 +480,7 @@ class GenericFuturesAccessor(BaseAccessor):
                         / price_history_final[c_front].shift(1)
                     ) - 1
                     price_history_final["far_return"] = (
-                        price_history_final[c_far]
-                        / price_history_final[c_far].shift(1)
+                        price_history_final[c_far] / price_history_final[c_far].shift(1)
                     ) - 1
                     price_history_final["cross_return"] = (
                         price_history_final[c_front]

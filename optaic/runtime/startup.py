@@ -39,16 +39,16 @@ def _utc_now() -> str:
 
 # Services in startup order (first to start, last to stop)
 STARTUP_ORDER: list[str] = [
-    "db-migrations",      # 1. Core DB migrations
+    "db-migrations",  # 1. Core DB migrations
     "engine-migrations",  # 2. Engine DB migrations (Prefect/MLflow)
-    "redis",              # 3. Redis (optional)
-    "centrifugo",         # 4. Centrifugo
-    "prefect-server",     # 5. Prefect server
-    "prefect-worker",     # 6. Prefect worker
-    "mlflow",             # 7. MLflow server
-    "api",                # 8. API
-    "worker",             # 9. Worker
-    "agent",              # 10. Agent
+    "redis",  # 3. Redis (optional)
+    "centrifugo",  # 4. Centrifugo
+    "prefect-server",  # 5. Prefect server
+    "prefect-worker",  # 6. Prefect worker
+    "mlflow",  # 7. MLflow server
+    "api",  # 8. API
+    "worker",  # 9. Worker
+    "agent",  # 10. Agent
 ]
 
 

@@ -47,6 +47,7 @@ async def _resource_chain(
     cache[resource_id] = chain
     return chain
 
+
 @router.get("", response_model=ActivityPage)
 async def list_activities(
     resource_id: Optional[UUID] = Query(default=None),
@@ -70,7 +71,9 @@ async def list_activities(
         )
     )
     subscriptions = list(subscription_result.all())
-    resource_subs = {sub.resource_id for sub in subscriptions if sub.scope == "resource"}
+    resource_subs = {
+        sub.resource_id for sub in subscriptions if sub.scope == "resource"
+    }
     descendant_subs = {
         sub.resource_id for sub in subscriptions if sub.scope == "descendants"
     }
@@ -79,7 +82,11 @@ async def list_activities(
         allowed, _explain = await authorize(
             db, actor.tenant_id, actor.id, resource_id, Permission.VIEW_ACTIVITY_FEED
         )
-        if not allowed and resource_id not in resource_subs and resource_id not in descendant_subs:
+        if (
+            not allowed
+            and resource_id not in resource_subs
+            and resource_id not in descendant_subs
+        ):
             raise HTTPException(status_code=403, detail="Forbidden")
 
     visible: List[ActivityEventV1] = []
@@ -104,7 +111,9 @@ async def list_activities(
                 )
             )
 
-        query = query.order_by(Activity.created_at.desc(), Activity.id.desc()).limit(limit + 1)
+        query = query.order_by(Activity.created_at.desc(), Activity.id.desc()).limit(
+            limit + 1
+        )
         result = await db.scalars(query)
         batch = result.all()
         if not batch:

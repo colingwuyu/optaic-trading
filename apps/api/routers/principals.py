@@ -17,6 +17,7 @@ from libs.db.models.resource import Resource
 
 router = APIRouter(prefix="/principals", tags=["Principals"])
 
+
 async def _get_tenant_root(db: AsyncSession, tenant_id: UUID) -> Resource:
     result = await db.scalars(
         select(Resource)
@@ -30,6 +31,7 @@ async def _get_tenant_root(db: AsyncSession, tenant_id: UUID) -> Resource:
     if not root:
         raise HTTPException(status_code=404, detail="Tenant root resource not found")
     return root
+
 
 @router.post("", response_model=PrincipalOut, status_code=201)
 async def create_principal(
@@ -78,10 +80,14 @@ async def create_principal(
         resource_type=root_type,
         action="principal.created",
         target_principal_id=principal_id,
-        payload={"principal_id": str(principal_id), "display_name": payload.display_name},
+        payload={
+            "principal_id": str(principal_id),
+            "display_name": payload.display_name,
+        },
     )
     created, _activity = await tx_activity(db, envelope, domain_fn)
     return PrincipalOut.model_validate(created)
+
 
 @router.get("", response_model=List[PrincipalOut])
 async def list_principals(

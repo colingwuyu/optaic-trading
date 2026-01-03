@@ -19,7 +19,9 @@ class MergeRequest(Base):
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
     mr_resource_id: Mapped[UUID] = mapped_column(ForeignKey("resources.id"))
-    target_resource_id: Mapped[UUID] = mapped_column(ForeignKey("resources.id"), index=True)
+    target_resource_id: Mapped[UUID] = mapped_column(
+        ForeignKey("resources.id"), index=True
+    )
     source_ref: Mapped[str] = mapped_column(String(255))
     target_ref: Mapped[str] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(50), default="open", index=True)
@@ -27,8 +29,12 @@ class MergeRequest(Base):
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     description: Mapped[str | None] = mapped_column(String(4096), nullable=True)
     created_by: Mapped[UUID] = mapped_column(ForeignKey("principals.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
 
     __table_args__ = (
         UniqueConstraint("mr_resource_id", name="uq_merge_requests_mr_resource_id"),
@@ -46,8 +52,12 @@ class Approval(Base):
     approver_id: Mapped[UUID] = mapped_column(ForeignKey("principals.id"))
     decision: Mapped[str] = mapped_column(String(50))
     comment: Mapped[str | None] = mapped_column(String(1024), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
 
     __table_args__ = (
         UniqueConstraint(

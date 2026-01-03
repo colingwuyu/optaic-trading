@@ -19,8 +19,12 @@ class Notification(Base):
     tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
     principal_id: Mapped[UUID] = mapped_column(ForeignKey("principals.id"), index=True)
     activity_id: Mapped[UUID] = mapped_column(ForeignKey("activities.id"), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    read_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     __table_args__ = (
         UniqueConstraint(
@@ -39,7 +43,9 @@ class AuditLog(Base):
     tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
     activity_id: Mapped[UUID] = mapped_column(ForeignKey("activities.id"), index=True)
     envelope: Mapped[dict] = mapped_column(JSONType)
-    processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    processed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )
 
     __table_args__ = (
         Index("ix_audit_log_tenant_processed", "tenant_id", "processed_at"),

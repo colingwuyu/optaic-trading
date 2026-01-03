@@ -112,7 +112,9 @@ class ConfigStore(BaseStore):
         **kwargs: Any,
     ) -> int:
         """Write is not supported for config store."""
-        raise NotImplementedError("ConfigStore is read-only. Cannot write to config files.")
+        raise NotImplementedError(
+            "ConfigStore is read-only. Cannot write to config files."
+        )
 
     def exists(self) -> bool:
         """Check if config file exists."""
@@ -139,8 +141,12 @@ class ConfigStore(BaseStore):
 
     def delete(self) -> None:
         """Delete is not supported for config store."""
-        raise NotImplementedError("ConfigStore is read-only. Cannot delete config files.")
+        raise NotImplementedError(
+            "ConfigStore is read-only. Cannot delete config files."
+        )
 
     def clear(self) -> None:
         """Clear is not supported for config store."""
-        raise NotImplementedError("ConfigStore is read-only. Cannot clear config files.")
+        raise NotImplementedError(
+            "ConfigStore is read-only. Cannot clear config files."
+        )

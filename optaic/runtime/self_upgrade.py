@@ -17,7 +17,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="OptAIC self-upgrade runner.")
     parser.add_argument("--job", required=True, help="Path to upgrade job JSON.")
     parser.add_argument("--wait-pid", type=int, default=None, help="PID to wait for.")
-    parser.add_argument("--timeout", type=int, default=300, help="Wait timeout in seconds.")
+    parser.add_argument(
+        "--timeout", type=int, default=300, help="Wait timeout in seconds."
+    )
     args = parser.parse_args()
 
     job_path = Path(args.job)
@@ -136,9 +138,7 @@ def main() -> None:
             data_dir,
             action="upgrade.failed",
             outcome="failed",
-            actor_principal_id=str(actor_principal_id)
-            if actor_principal_id
-            else None,
+            actor_principal_id=str(actor_principal_id) if actor_principal_id else None,
             before_version=str(current_version) if current_version else None,
             after_version=str(job.get("version")) if job.get("version") else None,
             detail=str(exc),
@@ -164,6 +164,7 @@ def _run_pip(
     if trusted_host:
         cmd += ["--trusted-host", str(trusted_host)]
     subprocess.run(cmd, check=True)
+
 
 def _acquire_lock_with_retry(data_dir: Path, *, timeout_seconds: int) -> object:
     deadline = time.monotonic() + timeout_seconds

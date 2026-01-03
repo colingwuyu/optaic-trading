@@ -10,6 +10,7 @@ from libs.core.rbac import authorize as authorize_simple
 from libs.core.rbac.models import ActorContext, Permission
 from libs.db.models.resource import Resource
 
+
 async def get_resource_or_404(
     db: AsyncSession, tenant_id: UUID, resource_id: UUID
 ) -> Resource:
@@ -23,6 +24,7 @@ async def get_resource_or_404(
     if not resource:
         raise HTTPException(status_code=404, detail="Resource not found")
     return resource
+
 
 async def authorize_or_403(
     db: AsyncSession, actor: ActorContext, permission: Permission, resource_id: UUID

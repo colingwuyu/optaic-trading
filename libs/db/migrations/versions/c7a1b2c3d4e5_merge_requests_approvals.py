@@ -5,6 +5,7 @@ Revises: f0c1e2d3a4b5
 Create Date: 2025-12-26 12:00:00.000000
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -41,9 +42,18 @@ def upgrade() -> None:
             name="uq_approvals_tenant_resource_approver",
         ),
     )
-    op.create_index(op.f("ix_approvals_resource_id"), "approvals", ["resource_id"], unique=False)
-    op.create_index(op.f("ix_approvals_tenant_id"), "approvals", ["tenant_id"], unique=False)
-    op.create_index("ix_approvals_tenant_resource", "approvals", ["tenant_id", "resource_id"], unique=False)
+    op.create_index(
+        op.f("ix_approvals_resource_id"), "approvals", ["resource_id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_approvals_tenant_id"), "approvals", ["tenant_id"], unique=False
+    )
+    op.create_index(
+        "ix_approvals_tenant_resource",
+        "approvals",
+        ["tenant_id", "resource_id"],
+        unique=False,
+    )
 
     op.create_table(
         "merge_requests",
@@ -67,9 +77,21 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("mr_resource_id", name="uq_merge_requests_mr_resource_id"),
     )
-    op.create_index(op.f("ix_merge_requests_status"), "merge_requests", ["status"], unique=False)
-    op.create_index(op.f("ix_merge_requests_target_resource_id"), "merge_requests", ["target_resource_id"], unique=False)
-    op.create_index(op.f("ix_merge_requests_tenant_id"), "merge_requests", ["tenant_id"], unique=False)
+    op.create_index(
+        op.f("ix_merge_requests_status"), "merge_requests", ["status"], unique=False
+    )
+    op.create_index(
+        op.f("ix_merge_requests_target_resource_id"),
+        "merge_requests",
+        ["target_resource_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_merge_requests_tenant_id"),
+        "merge_requests",
+        ["tenant_id"],
+        unique=False,
+    )
     op.create_index(
         "ix_merge_requests_tenant_target",
         "merge_requests",
@@ -89,7 +111,9 @@ def downgrade() -> None:
     op.drop_index("ix_merge_requests_tenant_status", table_name="merge_requests")
     op.drop_index("ix_merge_requests_tenant_target", table_name="merge_requests")
     op.drop_index(op.f("ix_merge_requests_tenant_id"), table_name="merge_requests")
-    op.drop_index(op.f("ix_merge_requests_target_resource_id"), table_name="merge_requests")
+    op.drop_index(
+        op.f("ix_merge_requests_target_resource_id"), table_name="merge_requests"
+    )
     op.drop_index(op.f("ix_merge_requests_status"), table_name="merge_requests")
     op.drop_table("merge_requests")
 

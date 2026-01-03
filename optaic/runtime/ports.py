@@ -52,7 +52,6 @@ def is_port_available(port: int, bind_host: str = "127.0.0.1") -> bool:
         return False
 
 
-
 def find_free_port_in_range(
     start: int,
     end: int,

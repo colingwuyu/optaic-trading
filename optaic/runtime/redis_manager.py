@@ -227,8 +227,6 @@ def sha256_digest(path: Path) -> str:
     return digest.hexdigest()
 
 
-
-
 def _download(url: str, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     temp_path = dest.with_suffix(dest.suffix + ".tmp")

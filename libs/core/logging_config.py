@@ -6,11 +6,13 @@ import structlog
 
 from libs.core.settings import Settings
 
+
 def _resolve_level(level_name: str) -> int:
     level = logging.getLevelName(level_name.upper())
     if isinstance(level, str):
         return logging.INFO
     return level
+
 
 def configure_logging(settings: Settings) -> None:
     level = _resolve_level(settings.log_level)

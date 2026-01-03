@@ -185,7 +185,10 @@ def run_supervisor(config: SupervisorConfig) -> int:
             raise
         print("Migrations complete.")
 
-        if not config.settings.centrifugo_api_key or not config.settings.centrifugo_token_secret:
+        if (
+            not config.settings.centrifugo_api_key
+            or not config.settings.centrifugo_token_secret
+        ):
             raise RuntimeError(
                 "CENTRIFUGO_API_KEY and CENTRIFUGO_TOKEN_SECRET are required."
             )
@@ -204,7 +207,11 @@ def run_supervisor(config: SupervisorConfig) -> int:
             )
         except Exception as exc:
             print("Failed to plan infrastructure upgrades.")
-            if config.with_redis and not sys.platform.startswith("win") and not config.redis_url:
+            if (
+                config.with_redis
+                and not sys.platform.startswith("win")
+                and not config.redis_url
+            ):
                 print(
                     "Redis is enabled without --redis-url. Provide --redis-url or "
                     "disable --with-redis on non-Windows."

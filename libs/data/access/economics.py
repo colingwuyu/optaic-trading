@@ -157,7 +157,9 @@ class EconomicsAccessor(BaseAccessor):
             return df
 
         # Parse dates
-        retrieval_ts = pd.Timestamp(retrieval_dt) if retrieval_dt else pd.Timestamp.now()
+        retrieval_ts = (
+            pd.Timestamp(retrieval_dt) if retrieval_dt else pd.Timestamp.now()
+        )
         start_ts = pd.Timestamp(start_date) if start_date else None
         end_ts = pd.Timestamp(end_date) if end_date else None
 

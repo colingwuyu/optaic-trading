@@ -84,7 +84,9 @@ async def submit_definition(
     )
 
 
-@router.post("/definitions/{definition_id}/deploy", response_model=PipelineDefinitionOut)
+@router.post(
+    "/definitions/{definition_id}/deploy", response_model=PipelineDefinitionOut
+)
 async def deploy_definition(
     definition_id: UUID,
     actor: ActorContext = Depends(get_actor),

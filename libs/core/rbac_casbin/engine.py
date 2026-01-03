@@ -167,7 +167,9 @@ async def authorize_casbin(
     allowed_bindings = [
         binding
         for binding in bindings
-        if _role_allows(binding.role_name, resource_cache[binding.scope_resource_id].type)
+        if _role_allows(
+            binding.role_name, resource_cache[binding.scope_resource_id].type
+        )
     ]
 
     object_edges = [

@@ -217,6 +217,205 @@ Freshness changes emit activity events and notifications.
   - bulk backfill
   - incremental daily updates
 
+### 4.4 Flow Execution Resources (Execution Framework)
+
+**Key Insight**: Instance Resources and Flow Execution Resources are paired. When an Instance is created, its corresponding Flow Execution Resources are automatically created and registered with the orchestrator (Prefect).
+
+#### 4.4.1 Flow Execution vs Runs
+
+| Concept | What It Is | Lifecycle |
+|---------|-----------|-----------|
+| **Flow Execution Resource** | Registered Prefect deployment | Created when Instance is created |
+| **Run** | Each execution of a Flow | Created when flow is triggered |
+
+- **Flow Execution Resources** are **static** - they define WHAT can be executed
+- **Runs** are **dynamic** - they represent WHEN something was executed and results
+
+#### 4.4.2 Instance ↔ Flow Pairing
+
+Definitions specify which Flow Execution Resources to create for each Instance type:
+
+| Instance Type | Flow Execution Resources (embedded) | Purpose |
+|--------------|-------------------------------------|---------|
+| `DatasetInstance` | `bulk_run_deployment_id`, `incremental_deployment_id` | Full reload, incremental update |
+| `ModelInstance` | `training_deployment_id`, `inference_deployment_id`, `monitoring_deployment_id` | Training, inference, monitoring |
+| `BacktestInstance` | `backtest_deployment_id` | Backtest execution |
+| `PortfolioOptimizerInstance` | `optimization_deployment_id` | Portfolio optimization |
+
+Flow Execution Resources are **embedded** in Instance tables (Option B), but tracked in the activity system for audit and guardrails.
+
+#### 4.4.3 Instance Creation Initializes Flows
+
+```
+User creates: DatasetInstance("daily_prices")
+     │
+     ├── Definition says: "Create bulk_run and incremental flows"
+     │
+     ├── System creates:
+     │   ├── Prefect Deployment: "daily_prices.bulk_run"
+     │   │   └── code_ref → PipelineBulkRunFlow method
+     │   │
+     │   └── Prefect Deployment: "daily_prices.incremental"
+     │       └── code_ref → PipelineIncrementalFlow method
+     │
+     └── Instance stores:
+         ├── bulk_run_deployment_id: "prefect-deploy-abc"
+         └── incremental_deployment_id: "prefect-deploy-def"
+```
+
+#### 4.4.4 Lineage is Flow-to-Flow
+
+Lineage dependencies track **Flow Execution Resources**, not just Instances:
+
+```
+resource_lineage:
+  upstream: raw_prices.incremental_flow
+  downstream: daily_prices.incremental_flow
+  edge_kind: "data_dependency"
+```
+
+This enables:
+- Lineage checker to verify upstream flows' last run status
+- Blocking downstream execution if upstream is stale/error
+- Real-time status updates via activity subscription
+
+#### 4.4.5 Status Aggregation
+
+Each Flow Execution Resource has its own status (derived from latest run):
+
+```
+daily_prices.bulk_run       → status: "success", last_run: 2024-01-01
+daily_prices.incremental    → status: "running", last_run: 2024-01-15
+```
+
+Instance status is **aggregated** from its flows:
+- If ALL flows are SUCCESS → Instance status = READY
+- If ANY flow is ERROR → Instance status = ERROR
+- If ANY flow is STALE → Instance status = STALE
+
+Aggregation logic is defined in Definition's `status_aggregation_contract`.
+
+#### 4.4.6 Real-Time Status Updates (Observer Pattern)
+
+Flow Execution Resources **subscribe** to upstream flows' activities:
+
+```
+daily_prices.incremental subscribes to: activity:flow:{raw_prices.incremental.id}
+
+When raw_prices.incremental run completes:
+  1. Activity emitted: "flow.run_completed"
+  2. Centrifugo broadcasts to subscribers
+  3. daily_prices.incremental receives notification
+  4. Lineage status cache updated
+  5. (Optional) Auto-trigger downstream flow if configured
+```
+
+Subscription rules are defined in Definition's `subscription_contracts`.
+
+#### 4.4.7 Execution Time Flow
+
+```
+User/Schedule triggers: "daily_prices.incremental" flow
+     │
+     ├── 1. Lineage Engine checks upstream flows' statuses
+     │       ├── raw_prices.incremental → last run SUCCESS? ✓
+     │       └── If not ready → block/warn per guardrail contract
+     │
+     ├── 2. Guardrails Engine validates at run.submit gate
+     │       └── Contracts from Definition (freshness, schema, etc.)
+     │
+     ├── 3. Prefect executes the flow
+     │
+     ├── 4. Run Resource created (the activity/action)
+     │       └── PipelineRun { flow_deployment_id, started_at, status }
+     │
+     ├── 5. Audit Engine logs activity
+     │       └── ActivityEnvelope { action: "flow.run_completed" }
+     │
+     ├── 6. Activity broadcasted to subscribers via Centrifugo
+     │       └── Downstream flows get notified
+     │
+     └── 7. Status updated (aggregated to Instance if needed)
+```
+
+#### 4.4.8 Definition Specifies Flow Behavior
+
+Definitions contain flow specifications:
+
+```python
+class PipelineDefinition:
+    # Flow specifications (which flows to create for instances)
+    flow_specs = [
+        FlowSpec(
+            name="bulk_run",
+            code_ref="PipelineBulkRunFlow",
+            description="Full history reload",
+        ),
+        FlowSpec(
+            name="incremental",
+            code_ref="PipelineIncrementalFlow",
+            description="Append new data",
+        ),
+    ]
+
+    # Lineage contract (how to check upstream dependencies)
+    lineage_contracts = [
+        LineageContract(
+            edge_kind="data_dependency",
+            check_freshness=True,
+            block_if_stale=True,
+        ),
+    ]
+
+    # Status aggregation rule
+    status_aggregation_contract = {
+        "rule": "all_success_means_ready",
+        "priority": ["incremental", "bulk_run"],
+    }
+
+    # Subscription rules for real-time updates
+    subscription_contracts = [
+        SubscriptionContract(
+            subscribe_to="upstream.incremental",
+            on_event="flow.run_completed",
+            action="update_lineage_cache",
+        ),
+    ]
+```
+
+#### 4.4.9 ModelInstance Multi-Flow Example
+
+```
+ModelInstance("xgb_predictor")
+├── training_deployment_id → TrainingFlow
+│   ├── Depends on: training_dataset.incremental_flow
+│   ├── Outputs: MLflow Experiment Run, model artifact
+│   └── On success: Register model version
+│
+├── inference_deployment_id → InferenceFlow
+│   ├── Depends on: model_version (from training)
+│   ├── Depends on: inference_dataset.incremental_flow
+│   └── Outputs: Predictions dataset
+│
+└── monitoring_deployment_id → MonitoringFlow
+    ├── Depends on: inference outputs
+    ├── Outputs: Drift reports, performance metrics
+    └── Links to: Evidently project
+```
+
+#### 4.4.10 Extensibility for User Plugins
+
+While system provides base flows for standard resource types, Definitions can:
+- Add custom flows via `extra_flow_specs`
+- Override flow behavior via hooks
+- Define custom lineage contracts
+- Specify custom status aggregation rules
+
+SDK exposes:
+- `BaseFlowSpec` protocol for defining custom flows
+- `@flow_hook` decorator for customizing behavior
+- `LineageContract` for custom dependency rules
+
 ---
 
 ## 5) Unified event, audit, and communication backbone

@@ -8,11 +8,14 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from libs.core.events import ActivityEventV1
 
+
 class HealthCheck(BaseModel):
     ok: bool = True
 
+
 class TenantCreate(BaseModel):
     name: str = Field(examples=["Acme Corp"])
+
 
 class TenantOut(BaseModel):
     id: UUID
@@ -20,12 +23,16 @@ class TenantOut(BaseModel):
     created_at: datetime
     root_resource_id: Optional[UUID] = None
 
+
 class PrincipalCreate(BaseModel):
-    id: Optional[UUID] = Field(default=None, examples=["11111111-1111-1111-1111-111111111111"])
+    id: Optional[UUID] = Field(
+        default=None, examples=["11111111-1111-1111-1111-111111111111"]
+    )
     kind: str = Field(default="user", examples=["user"])
     status: str = Field(default="active", examples=["active"])
     display_name: str = Field(examples=["Dev User"])
     email: Optional[str] = Field(default=None, examples=["dev@example.com"])
+
 
 class PrincipalOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -38,19 +45,27 @@ class PrincipalOut(BaseModel):
     email: Optional[str]
     created_at: datetime
 
+
 class ResourceCreate(BaseModel):
     type: str = Field(examples=["Project"])
     parent_id: UUID = Field(examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"])
     name: str = Field(examples=["Roadmap"])
-    metadata: Dict[str, Any] = Field(default_factory=dict, examples=[{"break_inheritance": False}])
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict, examples=[{"break_inheritance": False}]
+    )
+
 
 class ResourceUpdate(BaseModel):
     name: Optional[str] = Field(default=None, examples=["Updated name"])
     status: Optional[str] = Field(default=None, examples=["archived"])
-    metadata: Optional[Dict[str, Any]] = Field(default=None, examples=[{"break_inheritance": True}])
+    metadata: Optional[Dict[str, Any]] = Field(
+        default=None, examples=[{"break_inheritance": True}]
+    )
+
 
 class ResourceMove(BaseModel):
     new_parent_id: UUID = Field(examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"])
+
 
 class ResourceOut(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
@@ -66,18 +81,22 @@ class ResourceOut(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
 class ResourcePage(BaseModel):
     items: List[ResourceOut]
     next_cursor: Optional[str] = None
+
 
 class ResourceTree(BaseModel):
     resource: ResourceOut
     children: List["ResourceTree"] = Field(default_factory=list)
 
+
 class RoleBindingCreate(BaseModel):
     principal_id: UUID
     role_name: str = Field(examples=["viewer"])
     scope_resource_id: UUID
+
 
 class RoleBindingOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -91,18 +110,22 @@ class RoleBindingOut(BaseModel):
     granted_at: datetime
     revoked_at: Optional[datetime] = None
 
+
 class EffectivePermissionsOut(BaseModel):
     principal_id: UUID
     resource_id: UUID
     permissions: List[str]
 
+
 class ActivityPage(BaseModel):
     items: List[ActivityEventV1]
     next_cursor: Optional[str] = None
 
+
 class BranchCreate(BaseModel):
     ref_name: str = Field(examples=["feature-x"])
     from_ref: str = Field(default="main", examples=["main"])
+
 
 class BranchOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -113,6 +136,7 @@ class BranchOut(BaseModel):
     updated_by: UUID
     updated_at: datetime
 
+
 class MergeRequestCreate(BaseModel):
     target_resource_id: UUID
     source_ref: str = Field(examples=["feature-x"])
@@ -120,6 +144,7 @@ class MergeRequestCreate(BaseModel):
     title: Optional[str] = Field(default=None, examples=["Add metric"])
     description: Optional[str] = Field(default=None, examples=["Implements new KPI"])
     required_approvals: int = Field(default=1, ge=0, examples=[1])
+
 
 class MergeRequestOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -138,9 +163,11 @@ class MergeRequestOut(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
 class MergeApprovalIn(BaseModel):
     decision: str = Field(examples=["approve"])
     comment: Optional[str] = Field(default=None, examples=["Looks good"])
+
 
 class MergeApprovalOut(BaseModel):
     mr_id: UUID
@@ -150,6 +177,7 @@ class MergeApprovalOut(BaseModel):
     required_approvals: int
     status: str
 
+
 class MergeExecuteOut(BaseModel):
     mr_id: UUID
     target_resource_id: UUID
@@ -157,9 +185,11 @@ class MergeExecuteOut(BaseModel):
     new_version_id: UUID
     status: str
 
+
 class SubscriptionCreate(BaseModel):
     resource_id: UUID
     scope: str = Field(default="resource", examples=["resource"])
+
 
 class SubscriptionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -172,6 +202,7 @@ class SubscriptionOut(BaseModel):
     created_at: datetime
     revoked_at: Optional[datetime] = None
 
+
 class PromotionCreate(BaseModel):
     moving_resource_id: UUID
     to_scope_id: UUID
@@ -180,6 +211,7 @@ class PromotionCreate(BaseModel):
     )
     mode: str = Field(examples=["move"])
     rbac_template_ref: Optional[str] = Field(default=None, examples=["default"])
+
 
 class PromotionRequestOut(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
@@ -199,9 +231,11 @@ class PromotionRequestOut(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
 class PromotionApprovalIn(BaseModel):
     decision: str = Field(examples=["approve"])
     comment: Optional[str] = Field(default=None, examples=["Looks good"])
+
 
 class PromotionApprovalOut(BaseModel):
     pr_id: UUID
@@ -211,6 +245,7 @@ class PromotionApprovalOut(BaseModel):
     required_approvals: int
     status: str
 
+
 class PromotionExecuteOut(BaseModel):
     pr_id: UUID
     status: str
@@ -218,6 +253,7 @@ class PromotionExecuteOut(BaseModel):
     new_root_id: Optional[UUID]
     moved_count: int
     copied_count: int
+
 
 class RealtimeTokenRequest(BaseModel):
     channels: List[str] = Field(
@@ -231,27 +267,34 @@ class RealtimeTokenRequest(BaseModel):
         ],
     )
 
+
 class RealtimeTokenResponse(BaseModel):
     connection_token: str
     subscriptions: Dict[str, str] = Field(default_factory=dict)
+
 
 class RealtimeBootstrapChannel(BaseModel):
     id: UUID
     name: str
     channel: str
 
+
 class RealtimeBootstrapResource(BaseModel):
     resource_id: UUID
     channel: str
+
 
 class RealtimeBootstrapResponse(BaseModel):
     tenant_id: UUID
     principal_id: UUID
     inbox_channel: str
     chat_channels: List[RealtimeBootstrapChannel] = Field(default_factory=list)
-    resource_subscriptions: List[RealtimeBootstrapResource] = Field(default_factory=list)
+    resource_subscriptions: List[RealtimeBootstrapResource] = Field(
+        default_factory=list
+    )
     connection_token: str
     subscription_tokens: Dict[str, str] = Field(default_factory=dict)
+
 
 class SystemUpgradePlanIn(BaseModel):
     with_redis: bool = False
@@ -344,12 +387,14 @@ class SystemChannelStatus(BaseModel):
     channel: str
     package_index_url: Optional[str] = None
 
+
 class ChannelCreate(BaseModel):
     parent_id: UUID = Field(examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"])
     channel_kind: str = Field(examples=["group"])
     name: str = Field(examples=["Product Updates"])
     topic: Optional[str] = Field(default=None, examples=["Roadmap discussion"])
     settings: Dict[str, Any] = Field(default_factory=dict)
+
 
 class ChannelOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -361,13 +406,16 @@ class ChannelOut(BaseModel):
     settings: Dict[str, Any]
     created_at: datetime
 
+
 class MessageCreate(BaseModel):
     body: str = Field(examples=["Hello world"])
     body_json: Optional[Dict[str, Any]] = None
 
+
 class MessageUpdate(BaseModel):
     body: str = Field(examples=["Updated message"])
     body_json: Optional[Dict[str, Any]] = None
+
 
 class MessageOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -382,12 +430,15 @@ class MessageOut(BaseModel):
     edited_at: Optional[datetime]
     created_at: datetime
 
+
 class MessagePage(BaseModel):
     items: List[MessageOut]
     next_cursor: Optional[str] = None
 
+
 class ReadReceiptIn(BaseModel):
     last_read_message_id: UUID
+
 
 class ReadReceiptOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -398,12 +449,14 @@ class ReadReceiptOut(BaseModel):
     last_read_message_id: Optional[UUID]
     updated_at: datetime
 
+
 class AttachmentUploadInitIn(BaseModel):
     channel_id: UUID = Field(examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"])
     filename: str = Field(examples=["design.png"])
     content_type: str = Field(examples=["image/png"])
     bytes: int = Field(examples=[1048576])
     checksum: Optional[str] = Field(default=None, examples=["sha256:deadbeef"])
+
 
 class AttachmentUploadInitOut(BaseModel):
     presigned_put_url: str
@@ -412,10 +465,12 @@ class AttachmentUploadInitOut(BaseModel):
     headers: Dict[str, str] = Field(default_factory=dict)
     expires_in: int = Field(examples=[900])
 
+
 class AttachmentFinalizeIn(BaseModel):
     message_id: UUID
     object_key: str
     checksum: Optional[str] = Field(default=None, examples=["md5:deadbeef"])
+
 
 class AttachmentFinalizeOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -430,6 +485,7 @@ class AttachmentFinalizeOut(BaseModel):
     checksum: str
     created_at: datetime
 
+
 ResourceTree.model_rebuild()
 
 # ============================================================================
@@ -438,8 +494,10 @@ ResourceTree.model_rebuild()
 
 # --- Pipeline Schemas ---
 
+
 class PipelineDefinitionCreate(BaseModel):
     """Create a pipeline definition."""
+
     name: str = Field(examples=["FRED Pipeline"])
     code_ref: str = Field(examples=["FREDPipeline"])
     category: str = Field(examples=["etl"])
@@ -453,6 +511,7 @@ class PipelineDefinitionCreate(BaseModel):
 
 class PipelineDefinitionOut(BaseModel):
     """Pipeline definition response."""
+
     id: UUID
     name: str
     code_ref: str
@@ -462,6 +521,7 @@ class PipelineDefinitionOut(BaseModel):
 
 class PipelineInstanceCreate(BaseModel):
     """Create a pipeline instance from a definition."""
+
     name: str = Field(examples=["Daily FRED Update"])
     definition_id: UUID = Field(examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"])
     parent_id: UUID = Field(examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"])
@@ -471,6 +531,7 @@ class PipelineInstanceCreate(BaseModel):
 
 class PipelineInstanceOut(BaseModel):
     """Pipeline instance response."""
+
     id: UUID
     name: str
     definition_id: UUID
@@ -480,6 +541,7 @@ class PipelineInstanceOut(BaseModel):
 
 class PipelineRunOut(BaseModel):
     """Pipeline run response."""
+
     instance_id: UUID
     code_ref: str
     status: str
@@ -488,8 +550,10 @@ class PipelineRunOut(BaseModel):
 
 # --- Dataset Schemas ---
 
+
 class DatasetPreviewRequest(BaseModel):
     """Request dataset preview."""
+
     start_date: Optional[str] = Field(default=None, examples=["2024-01-01"])
     end_date: Optional[str] = Field(default=None, examples=["2024-12-31"])
     as_of_date: Optional[str] = Field(default=None, examples=["2024-06-15"])
@@ -498,6 +562,7 @@ class DatasetPreviewRequest(BaseModel):
 
 class DatasetPreviewOut(BaseModel):
     """Dataset preview response."""
+
     id: UUID
     name: str
     columns: List[str]
@@ -508,6 +573,7 @@ class DatasetPreviewOut(BaseModel):
 
 class DatasetRefreshOut(BaseModel):
     """Dataset refresh response."""
+
     id: UUID
     name: str
     status: str
@@ -554,8 +620,10 @@ class DatasetStatusOut(BaseModel):
 
 # --- Signal Schemas ---
 
+
 class SignalRegisterRequest(BaseModel):
     """Register a dataset as a signal."""
+
     dataset_id: UUID = Field(examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"])
     name: str = Field(examples=["momentum_signal"])
     parent_id: UUID = Field(examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"])
@@ -567,6 +635,7 @@ class SignalRegisterRequest(BaseModel):
 
 class SignalOut(BaseModel):
     """Signal response."""
+
     id: UUID
     name: str
     min_value: float
@@ -578,6 +647,7 @@ class SignalOut(BaseModel):
 
 class SignalValidateOut(BaseModel):
     """Signal validation response."""
+
     id: UUID
     valid: bool
     issues: List[Dict[str, Any]]
@@ -585,8 +655,10 @@ class SignalValidateOut(BaseModel):
 
 # --- Operator Schemas ---
 
+
 class OperatorOut(BaseModel):
     """Operator info response."""
+
     name: str
     category: str
     arity: int
@@ -595,16 +667,18 @@ class OperatorOut(BaseModel):
 
 class OperatorListOut(BaseModel):
     """List of operators response."""
+
     operators: List[OperatorOut]
     count: int
 
 
 class ExpressionEvaluateRequest(BaseModel):
     """Evaluate an expression."""
+
     expression: str = Field(examples=["MEAN($close, 20)"])
     context: Dict[str, UUID] = Field(
         default_factory=dict,
-        examples=[{"close": "9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"}]
+        examples=[{"close": "9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"}],
     )
     start_date: Optional[str] = Field(default=None, examples=["2024-01-01"])
     end_date: Optional[str] = Field(default=None, examples=["2024-12-31"])
@@ -612,6 +686,7 @@ class ExpressionEvaluateRequest(BaseModel):
 
 class ExpressionEvaluateOut(BaseModel):
     """Expression evaluation response."""
+
     success: bool
     expression: str
     result_type: Optional[str] = None
@@ -625,8 +700,10 @@ class ExpressionEvaluateOut(BaseModel):
 
 # --- Experiment Schemas ---
 
+
 class ExperimentCreate(BaseModel):
     """Create an experiment."""
+
     name: str = Field(examples=["Momentum Strategy"])
     expression: str = Field(examples=["CORR($returns, REF($volume, 1), 20)"])
     parent_id: UUID = Field(examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"])
@@ -636,6 +713,7 @@ class ExperimentCreate(BaseModel):
 
 class ExperimentOut(BaseModel):
     """Experiment response."""
+
     id: UUID
     name: str
     expression: str
@@ -646,6 +724,7 @@ class ExperimentOut(BaseModel):
 
 class ExperimentRunRequest(BaseModel):
     """Run an experiment."""
+
     start_date: Optional[str] = Field(default=None, examples=["2024-01-01"])
     end_date: Optional[str] = Field(default=None, examples=["2024-12-31"])
     limit: int = Field(default=100, ge=1, le=1000)
@@ -653,6 +732,7 @@ class ExperimentRunRequest(BaseModel):
 
 class ExperimentRunOut(BaseModel):
     """Experiment run response."""
+
     id: Optional[UUID] = None
     success: bool
     name: Optional[str] = None
@@ -668,12 +748,14 @@ class ExperimentRunOut(BaseModel):
 
 class ExperimentUpdate(BaseModel):
     """Update an experiment."""
+
     expression: Optional[str] = Field(default=None)
     input_datasets: Optional[Dict[str, UUID]] = Field(default=None)
 
 
 class MacroSaveOut(BaseModel):
     """Macro save response."""
+
     id: UUID
     name: str
     expression: str

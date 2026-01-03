@@ -144,6 +144,31 @@ Replace name-based catalog lookup with Resource ID lookup:
 
 ---
 
+### 2.7 Execution Orchestration Infrastructure (✅ DONE)
+
+**Objective**: Build the engine that executes runs, tracks status, and manages dependencies.
+
+#### 2.7.1 Components (`libs/orchestration/`)
+- **RunExecutionService**: Central coordinator.
+  - Creates Run resources.
+  - Validates via Guardrails.
+  - Submits to Orchestrator.
+  - Polls status.
+  - Emits Activity.
+- **OrchestratorAdapter**: Interface for execution backends.
+  - `LocalOrchestrator`: In-process async execution (dev/test).
+  - `PrefectOrchestrator`: External execution (prod).
+- **LineageResolver**: Resolves DAGs and checks freshness.
+- **StatusStore**: Tracks granular execution state.
+
+#### 2.7.2 Integration Flow
+1. **Submit**: `RunExecutionService.submit_pipeline_run()`
+2. **Guard**: `GuardrailsEngine.validate_at_gate(scope="run")`
+3. **Resolve**: `build_graph()` -> `DAG`
+4. **Execute**: `orchestrator.submit_run(flow_def)`
+5. **Track**: `StatusStore.mark_run_start/success/error`
+6. **Audit**: `Activity.emit("pipeline.run_started")`
+
 ## Phase 2.5: Integration Bridge - code_ref Linkage
 
 **Objective**: Clarify how Phase 1 (DB models with `code_ref`) connects to Phase 2 (libs/data/ factories) through the service layer.

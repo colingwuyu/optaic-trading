@@ -26,6 +26,7 @@ from optaic.runtime.upgrade_manager import (
 @dataclass
 class ServiceProcess:
     """Internal tracking of a running subprocess."""
+
     name: str
     process: subprocess.Popen
     pid_path: Path
@@ -35,6 +36,7 @@ class ServiceProcess:
 @dataclass
 class ServiceState:
     """Runtime state of a managed service for health reporting."""
+
     name: str
     pid: int | None
     status: Literal["running", "stopped", "starting", "failed", "unknown"]
@@ -210,7 +212,6 @@ class ServiceManager:
             }
         except Exception:
             return {}
-
 
     def start_prefect(self, config: PrefectConfig) -> str | None:
         if not config.enabled:
@@ -413,7 +414,9 @@ class ServiceManager:
         )
         return tracking_uri
 
-    def stop_all(self, timeout_seconds: float = 5.0, *, reverse_order: bool = True) -> list[ServiceState]:
+    def stop_all(
+        self, timeout_seconds: float = 5.0, *, reverse_order: bool = True
+    ) -> list[ServiceState]:
         """Stop all managed services.
 
         Args:
@@ -424,7 +427,9 @@ class ServiceManager:
             List of ServiceState for each stopped service.
         """
         results: list[ServiceState] = []
-        procs = list(reversed(self.processes)) if reverse_order else list(self.processes)
+        procs = (
+            list(reversed(self.processes)) if reverse_order else list(self.processes)
+        )
 
         for proc in procs:
             if proc.process.poll() is None:
@@ -434,7 +439,9 @@ class ServiceManager:
         for proc in procs:
             if proc.process.poll() is not None:
                 self._remove_pidfile(proc.pid_path)
-                results.append(ServiceState(name=proc.name, pid=proc.process.pid, status="stopped"))
+                results.append(
+                    ServiceState(name=proc.name, pid=proc.process.pid, status="stopped")
+                )
                 continue
             remaining = deadline - time.monotonic()
             if remaining <= 0:
@@ -445,14 +452,17 @@ class ServiceManager:
                 except subprocess.TimeoutExpired:
                     proc.process.kill()
             self._remove_pidfile(proc.pid_path)
-            results.append(ServiceState(name=proc.name, pid=proc.process.pid, status="stopped"))
+            results.append(
+                ServiceState(name=proc.name, pid=proc.process.pid, status="stopped")
+            )
 
         self.processes.clear()
         self.write_services_state_json()
         return results
 
-
-    def _track_process(self, name: str, process: subprocess.Popen, port: int | None = None) -> None:
+    def _track_process(
+        self, name: str, process: subprocess.Popen, port: int | None = None
+    ) -> None:
         """Track a started subprocess with pidfile and optional log streaming."""
         pid_path = self._pids_dir() / f"{name}.pid"
         log_path = self._logs_dir() / f"{name}.log"
@@ -460,9 +470,12 @@ class ServiceManager:
         self._started_at[name] = _utc_now()
         if port:
             self._ports[name] = port
-        self.processes.append(ServiceProcess(name=name, process=process, pid_path=pid_path, log_path=log_path))
+        self.processes.append(
+            ServiceProcess(
+                name=name, process=process, pid_path=pid_path, log_path=log_path
+            )
+        )
         self.log_threads.append(_stream_logs(process, f"[{name}]"))
-
 
     def _write_pidfile(self, path: Path, pid: int | None) -> None:
         if pid is None:
@@ -476,7 +489,9 @@ class ServiceManager:
         except FileNotFoundError:
             return
 
-    def _ensure_prefect_work_pool(self, config: PrefectConfig, env: dict[str, str]) -> None:
+    def _ensure_prefect_work_pool(
+        self, config: PrefectConfig, env: dict[str, str]
+    ) -> None:
         cmd = [
             sys.executable,
             "-m",
@@ -488,7 +503,13 @@ class ServiceManager:
             "process",
             "--overwrite",
         ]
-        subprocess.run(cmd, env=env, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(
+            cmd,
+            env=env,
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
     def _record_service(
         self,
@@ -734,4 +755,3 @@ def _is_process_alive(pid: int) -> bool:
             return True
         except OSError:
             return False
-

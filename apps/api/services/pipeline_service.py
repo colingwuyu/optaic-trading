@@ -18,7 +18,11 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from libs.core.activity import ActivityEnvelope, record_activity_with_outbox, tx_activity
+from libs.core.activity import (
+    ActivityEnvelope,
+    record_activity_with_outbox,
+    tx_activity,
+)
 from libs.core.rbac.models import ActorContext
 from libs.data.registry import PIPELINE_FACTORY
 from libs.db.models.quant import (
@@ -78,7 +82,9 @@ class PipelineService:
         """
         # Validate code_ref exists in factory
         if code_ref not in PIPELINE_FACTORY:
-            raise ValueError(f"code_ref '{code_ref}' not registered in PIPELINE_FACTORY")
+            raise ValueError(
+                f"code_ref '{code_ref}' not registered in PIPELINE_FACTORY"
+            )
 
         resource_id = uuid4()
 
@@ -161,7 +167,9 @@ class PipelineService:
             raise ValueError(f"PipelineDefinition {definition_id} not found")
 
         if resource.status != "draft":
-            raise ValueError(f"Cannot deploy: status is '{resource.status}', expected 'draft'")
+            raise ValueError(
+                f"Cannot deploy: status is '{resource.status}', expected 'draft'"
+            )
 
         definition = await session.get(PipelineDefinition, definition_id)
         if not definition:
@@ -302,7 +310,9 @@ class PipelineService:
             raise ValueError(f"PipelineInstance {instance_id} not found")
 
         # Load definition to get code_ref
-        definition = await session.get(PipelineDefinition, instance.definition_resource_id)
+        definition = await session.get(
+            PipelineDefinition, instance.definition_resource_id
+        )
         if not definition:
             raise ValueError("Pipeline definition not found")
 
@@ -442,7 +452,9 @@ class PipelineService:
                 "name": resource.name,
                 "definition_id": str(instance.definition_resource_id),
                 "status": instance.status,
-                "last_run_at": instance.last_run_at.isoformat() if instance.last_run_at else None,
+                "last_run_at": instance.last_run_at.isoformat()
+                if instance.last_run_at
+                else None,
             }
             for resource, instance in rows
         ]

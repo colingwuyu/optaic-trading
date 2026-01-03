@@ -96,7 +96,9 @@ async def system_runtime(
     else:
         with_redis = "--with-redis" in server_args
     upgrade_status = read_upgrade_status(data_dir)
-    last_upgrade = upgrade_status.get("finished_at") or _read_last_upgrade_time(data_dir)
+    last_upgrade = upgrade_status.get("finished_at") or _read_last_upgrade_time(
+        data_dir
+    )
 
     return SystemRuntimeStatus(
         version=get_version(),
@@ -360,9 +362,7 @@ async def upgrade_start(
     )
 
 
-async def _require_system_admin(
-    db: AsyncSession, actor: ActorContext
-) -> Resource:
+async def _require_system_admin(db: AsyncSession, actor: ActorContext) -> Resource:
     system_space = await _get_system_space(db, actor.tenant_id)
     if await _has_owner_role(db, actor, system_space):
         return system_space
@@ -469,16 +469,14 @@ def _check_package_updates(
         }
     else:
         warnings.append(
-            "OPTAIC_PACKAGE_INDEX_URL or OPTAIC_ARTIFACTORY_BASE_URL "
-            "is not configured."
+            "OPTAIC_PACKAGE_INDEX_URL or OPTAIC_ARTIFACTORY_BASE_URL is not configured."
         )
         payload = check_pypi_latest(
             package_name=settings.package_name,
             current_version=current_version,
         )
         payload["message"] = (
-            "OPTAIC_PACKAGE_INDEX_URL or OPTAIC_ARTIFACTORY_BASE_URL "
-            "is not configured."
+            "OPTAIC_PACKAGE_INDEX_URL or OPTAIC_ARTIFACTORY_BASE_URL is not configured."
         )
     write_package_update_state(data_dir, payload)
     return SystemPackageUpdate(**payload)
@@ -531,7 +529,9 @@ def _trigger_self_upgrade(job_path: Path, server_pid: int | None) -> None:
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
     else:
         start_new_session = True
-    subprocess.Popen(cmd, creationflags=creationflags, start_new_session=start_new_session)
+    subprocess.Popen(
+        cmd, creationflags=creationflags, start_new_session=start_new_session
+    )
     os._exit(0)
 
 

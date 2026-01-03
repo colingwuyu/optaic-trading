@@ -66,9 +66,7 @@ async def test_put_and_get_bundle():
         assert put_data["bundle"]["bundle_id"] == bundle_id
 
         # GET the bundle
-        get_response = await client.get(
-            f"/guardrails/resources/{resource_id}/bundle"
-        )
+        get_response = await client.get(f"/guardrails/resources/{resource_id}/bundle")
         assert get_response.status_code == 200
         get_data = get_response.json()
         assert get_data["bundle"] is not None

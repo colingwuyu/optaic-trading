@@ -10,7 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.api.deps import get_actor, get_db, get_guardrails_engine, reset_session
 from apps.api.pagination import decode_cursor, encode_cursor
 from apps.api.rbac_utils import authorize_or_403, get_resource_or_404
-from apps.api.schemas import ResourceCreate, ResourceMove, ResourceOut, ResourcePage, ResourceTree, ResourceUpdate
+from apps.api.schemas import (
+    ResourceCreate,
+    ResourceMove,
+    ResourceOut,
+    ResourcePage,
+    ResourceTree,
+    ResourceUpdate,
+)
 from libs.core.activity import ActivityEnvelope, tx_activity
 from libs.core.rbac.models import ActorContext, Permission
 from libs.core.versioning import initialize_versioning
@@ -20,6 +27,7 @@ from optaic.guardrails.runtime.engine import GuardrailsBlocked, GuardrailsEngine
 from fastapi import HTTPException
 
 router = APIRouter(prefix="/resources", tags=["Resources"])
+
 
 @router.post(
     "",
@@ -101,6 +109,7 @@ async def create_resource(
     resource, _activity = await tx_activity(db, envelope, domain_fn)
     return ResourceOut.model_validate(resource)
 
+
 @router.get("/{resource_id}", response_model=ResourceOut)
 async def get_resource(
     resource_id: UUID,
@@ -110,6 +119,7 @@ async def get_resource(
     resource = await get_resource_or_404(db, actor.tenant_id, resource_id)
     await authorize_or_403(db, actor, Permission.RESOURCE_READ, resource.id)
     return ResourceOut.model_validate(resource)
+
 
 @router.get("/{resource_id}/children", response_model=ResourcePage)
 async def list_children(
@@ -137,7 +147,9 @@ async def list_children(
                 ),
             )
         )
-    query = query.order_by(Resource.created_at.asc(), Resource.id.asc()).limit(limit + 1)
+    query = query.order_by(Resource.created_at.asc(), Resource.id.asc()).limit(
+        limit + 1
+    )
 
     result = await db.scalars(query)
     rows = result.all()
@@ -179,6 +191,7 @@ async def get_tree(
     resource = await get_resource_or_404(db, actor.tenant_id, resource_id)
     await authorize_or_403(db, actor, Permission.RESOURCE_READ, resource.id)
     return await _build_tree(db, actor.tenant_id, resource.id, depth)
+
 
 @router.patch("/{resource_id}", response_model=ResourceOut)
 async def update_resource(
@@ -260,6 +273,7 @@ async def update_resource(
     updated, _activity = await tx_activity(db, envelope, domain_fn)
     return ResourceOut.model_validate(updated)
 
+
 @router.post("/{resource_id}/move", response_model=ResourceOut)
 async def move_resource(
     resource_id: UUID,
@@ -298,10 +312,14 @@ async def move_resource(
         resource_id=resource_id,
         resource_type=resource_type,
         action="resource.moved",
-        payload={"from_parent": str(old_parent_id), "to_parent": str(payload.new_parent_id)},
+        payload={
+            "from_parent": str(old_parent_id),
+            "to_parent": str(payload.new_parent_id),
+        },
     )
     moved, _activity = await tx_activity(db, envelope, domain_fn)
     return ResourceOut.model_validate(moved)
+
 
 @router.delete("/{resource_id}", response_model=ResourceOut)
 async def delete_resource(

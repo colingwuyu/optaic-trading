@@ -191,12 +191,12 @@ async def test_realtime_bootstrap_filters_channels_and_subscriptions():
         owner_data = owner_bootstrap.json()
         owner_inbox = f"t:{tenant_id}:u:{owner_id}"
         assert owner_data["inbox_channel"] == owner_inbox
-        assert {
-            channel["id"] for channel in owner_data["chat_channels"]
-        } == {str(channel_id)}
-        assert {
-            sub["resource_id"] for sub in owner_data["resource_subscriptions"]
-        } == {str(root_resource_id)}
+        assert {channel["id"] for channel in owner_data["chat_channels"]} == {
+            str(channel_id)
+        }
+        assert {sub["resource_id"] for sub in owner_data["resource_subscriptions"]} == {
+            str(root_resource_id)
+        }
         owner_channels = {
             owner_inbox,
             f"t:{tenant_id}:c:{channel_id}",

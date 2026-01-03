@@ -114,15 +114,11 @@ class OpsClient:
         start_str = None
         if start_date:
             start_str = (
-                start_date.isoformat()
-                if isinstance(start_date, date)
-                else start_date
+                start_date.isoformat() if isinstance(start_date, date) else start_date
             )
         end_str = None
         if end_date:
-            end_str = (
-                end_date.isoformat() if isinstance(end_date, date) else end_date
-            )
+            end_str = end_date.isoformat() if isinstance(end_date, date) else end_date
 
         payload = _drop_none(
             {

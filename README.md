@@ -39,6 +39,15 @@ and a Windows-friendly embedded runtime.
 - **Operator Library**: 25+ built-in operators (REF, DELTA, MEAN, STD, CORR, ZSCORE, etc.).
 - **Expression Engine**: Evaluate complex expressions with dataset references.
 
+### Orchestration Layer (Phase 2.7)
+- **Run Execution Service**: Central coordination of all run types with activity logging and guardrails.
+- **Pluggable Orchestrators**: 
+  - `LocalOrchestrator`: In-process async execution for dev/testing.
+  - `PrefectOrchestrator`: Scalable distributed execution via Prefect.
+- **Dependency Management**: DAG resolution and lineage tracking for data correctness.
+- **Status Tracking**: Granular execution status and freshness tracking.
+
+
 ### API Layer (Phase 4)
 - **`/ops`**: List operators, get details, evaluate expressions
 - **`/pipelines`**: Pipeline definition CRUD, instance management, run triggers

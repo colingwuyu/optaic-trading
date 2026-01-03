@@ -18,6 +18,7 @@ from libs.db.models.rbac import RoleBinding
 
 router = APIRouter(prefix="/rbac", tags=["RBAC"])
 
+
 @router.post(
     "/grants",
     response_model=RoleBindingOut,
@@ -88,6 +89,7 @@ async def grant_role(
     binding, _activity = await tx_activity(db, envelope, domain_fn)
     return RoleBindingOut.model_validate(binding)
 
+
 @router.delete("/grants/{binding_id}", response_model=RoleBindingOut)
 async def revoke_role(
     binding_id: UUID,
@@ -137,6 +139,7 @@ async def revoke_role(
     revoked, _activity = await tx_activity(db, envelope, domain_fn)
     return RoleBindingOut.model_validate(revoked)
 
+
 @router.get("/grants", response_model=List[RoleBindingOut])
 async def list_grants(
     resource_id: UUID = Query(..., description="Scope resource to list bindings for"),
@@ -156,6 +159,7 @@ async def list_grants(
 
     result = await db.scalars(query.order_by(RoleBinding.granted_at.desc()))
     return [RoleBindingOut.model_validate(binding) for binding in result.all()]
+
 
 @router.get("/effective", response_model=EffectivePermissionsOut)
 async def list_effective_permissions(

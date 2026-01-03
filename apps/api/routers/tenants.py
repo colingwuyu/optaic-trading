@@ -8,7 +8,13 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.api.deps import get_actor, get_db, get_principal_id, get_tenant_id, reset_session
+from apps.api.deps import (
+    get_actor,
+    get_db,
+    get_principal_id,
+    get_tenant_id,
+    reset_session,
+)
 from apps.api.schemas import TenantCreate, TenantOut
 from libs.core.activity import ActivityEnvelope, tx_activity
 from libs.core.rbac import authorize
@@ -34,6 +40,7 @@ DEFAULT_ROLE_PERMISSIONS = {
     "auditor": [Permission.VIEW_ACTIVITY_FEED.value],
 }
 
+
 @router.post(
     "",
     response_model=TenantOut,
@@ -42,7 +49,9 @@ DEFAULT_ROLE_PERMISSIONS = {
 async def create_tenant(
     payload: TenantCreate = Body(
         ...,
-        examples={"default": {"summary": "Create tenant", "value": {"name": "Acme Corp"}}},
+        examples={
+            "default": {"summary": "Create tenant", "value": {"name": "Acme Corp"}}
+        },
     ),
     principal_id: UUID = Depends(get_principal_id),
     tenant_id: UUID = Depends(get_tenant_id),
@@ -59,6 +68,7 @@ async def create_tenant(
         raise HTTPException(status_code=409, detail="Tenant already exists")
 
     root_resource_id = uuid4()
+
     async def domain_fn(session: AsyncSession) -> tuple[Tenant, Resource]:
         tenant = Tenant(id=tenant_id, name=payload.name)
         session.add(tenant)
@@ -116,7 +126,9 @@ async def create_tenant(
             session, tenant_id, principal_id, root_resource_id, Permission.RBAC_GRANT
         )
         if not allowed:
-            raise HTTPException(status_code=403, detail="Bootstrap authorization failed")
+            raise HTTPException(
+                status_code=403, detail="Bootstrap authorization failed"
+            )
 
         return tenant, root_resource
 
@@ -128,11 +140,12 @@ async def create_tenant(
         resource_id=root_resource_id,
         resource_type="TenantRoot",
         action="tenant.created",
-        payload={"tenant_id": str(tenant_id), "root_resource_id": str(root_resource_id)},
+        payload={
+            "tenant_id": str(tenant_id),
+            "root_resource_id": str(root_resource_id),
+        },
     )
-    (tenant, _root_resource), _activity = await tx_activity(
-        db, envelope, domain_fn
-    )
+    (tenant, _root_resource), _activity = await tx_activity(db, envelope, domain_fn)
     return TenantOut(
         id=tenant.id,
         name=tenant.name,
@@ -140,15 +153,14 @@ async def create_tenant(
         root_resource_id=root_resource_id,
     )
 
+
 @router.get("", response_model=List[TenantOut])
 async def list_tenants(
     actor: ActorContext = Depends(get_actor),
     db: AsyncSession = Depends(get_db),
 ) -> List[TenantOut]:
     result = await db.scalars(
-        select(Tenant)
-        .where(Tenant.id == actor.tenant_id)
-        .order_by(Tenant.created_at)
+        select(Tenant).where(Tenant.id == actor.tenant_id).order_by(Tenant.created_at)
     )
     tenants = result.all()
     return [TenantOut(id=t.id, name=t.name, created_at=t.created_at) for t in tenants]

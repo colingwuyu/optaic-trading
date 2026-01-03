@@ -33,7 +33,7 @@ def compute_effective_enforcement(
     # Official subspace always enforces blocking
     if subspace_kind == "official":
         return "block"
-        
+
     # Staging subspace fails open (warn) even if hint is block
     if subspace_kind == "staging":
         return "warn"

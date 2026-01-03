@@ -7,7 +7,11 @@ import pytest
 
 from optaic.runtime.centrifugo_manager import CentrifugoConfig, write_centrifugo_config
 from optaic.runtime import redis_manager
-from optaic.runtime.redis_manager import resolve_redis_mode, verify_sha256, write_redis_conf
+from optaic.runtime.redis_manager import (
+    resolve_redis_mode,
+    verify_sha256,
+    write_redis_conf,
+)
 
 
 def test_sha256_verification(tmp_path) -> None:

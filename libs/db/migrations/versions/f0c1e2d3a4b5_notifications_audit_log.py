@@ -5,6 +5,7 @@ Revises: b977f47758b1
 Create Date: 2025-12-26 09:12:42.000000
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -40,9 +41,21 @@ def upgrade() -> None:
             name="uq_notifications_tenant_principal_activity",
         ),
     )
-    op.create_index(op.f("ix_notifications_activity_id"), "notifications", ["activity_id"], unique=False)
-    op.create_index(op.f("ix_notifications_principal_id"), "notifications", ["principal_id"], unique=False)
-    op.create_index(op.f("ix_notifications_tenant_id"), "notifications", ["tenant_id"], unique=False)
+    op.create_index(
+        op.f("ix_notifications_activity_id"),
+        "notifications",
+        ["activity_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_notifications_principal_id"),
+        "notifications",
+        ["principal_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_notifications_tenant_id"), "notifications", ["tenant_id"], unique=False
+    )
 
     op.create_table(
         "audit_log",
@@ -55,10 +68,21 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(op.f("ix_audit_log_activity_id"), "audit_log", ["activity_id"], unique=False)
-    op.create_index(op.f("ix_audit_log_tenant_id"), "audit_log", ["tenant_id"], unique=False)
-    op.create_index(op.f("ix_audit_log_processed_at"), "audit_log", ["processed_at"], unique=False)
-    op.create_index("ix_audit_log_tenant_processed", "audit_log", ["tenant_id", "processed_at"], unique=False)
+    op.create_index(
+        op.f("ix_audit_log_activity_id"), "audit_log", ["activity_id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_audit_log_tenant_id"), "audit_log", ["tenant_id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_audit_log_processed_at"), "audit_log", ["processed_at"], unique=False
+    )
+    op.create_index(
+        "ix_audit_log_tenant_processed",
+        "audit_log",
+        ["tenant_id", "processed_at"],
+        unique=False,
+    )
 
 
 def downgrade() -> None:

@@ -46,7 +46,11 @@ async def test_promotion_move_requires_destination_owner_and_updates_parent():
         dest_space = await client.post(
             "/resources",
             headers={"X-Principal-Id": str(owner_id), "X-Tenant-Id": str(tenant_id)},
-            json={"type": "Space", "parent_id": root_resource_id, "name": "Destination"},
+            json={
+                "type": "Space",
+                "parent_id": root_resource_id,
+                "name": "Destination",
+            },
         )
         assert dest_space.status_code == 201
         dest_space_id = dest_space.json()["id"]
@@ -169,7 +173,11 @@ async def test_promotion_copy_creates_derived_edge_and_reject_blocks_execute():
         dest_space = await client.post(
             "/resources",
             headers={"X-Principal-Id": str(owner_id), "X-Tenant-Id": str(tenant_id)},
-            json={"type": "Space", "parent_id": root_resource_id, "name": "Destination"},
+            json={
+                "type": "Space",
+                "parent_id": root_resource_id,
+                "name": "Destination",
+            },
         )
         assert dest_space.status_code == 201
         dest_space_id = dest_space.json()["id"]

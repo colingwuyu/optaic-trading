@@ -4,6 +4,7 @@ Revision ID: a1b2c3d4e5f6
 Revises: 7e8f9a0b1c2d
 Create Date: 2025-12-28 19:45:00.000000
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -21,7 +22,9 @@ def upgrade() -> None:
     # --- runs table: add adapter-friendly and status columns ---
     op.add_column(
         "runs",
-        sa.Column("status", sa.String(length=32), nullable=False, server_default="queued"),
+        sa.Column(
+            "status", sa.String(length=32), nullable=False, server_default="queued"
+        ),
     )
     op.add_column(
         "runs",
@@ -102,7 +105,9 @@ def upgrade() -> None:
     op.create_table(
         "system_engines",
         sa.Column("id", sa.String(length=64), nullable=False),
-        sa.Column("mode", sa.String(length=32), nullable=False, server_default="disabled"),
+        sa.Column(
+            "mode", sa.String(length=32), nullable=False, server_default="disabled"
+        ),
         sa.Column("base_url", sa.String(length=512), nullable=True),
         sa.Column("data_dir", sa.String(length=1024), nullable=True),
         sa.Column("db_uri", sa.String(length=1024), nullable=True),

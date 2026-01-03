@@ -110,7 +110,9 @@ class SQLiteStore(BaseStore):
                     query,
                     conn,
                     params=params,
-                    parse_dates=[primary_key] if "date" in primary_key.lower() else None,
+                    parse_dates=[primary_key]
+                    if "date" in primary_key.lower()
+                    else None,
                 )
             except Exception:
                 # Fallback without date parsing
@@ -193,6 +195,7 @@ class SQLiteStore(BaseStore):
                 row = cursor.fetchone()
                 if row and row[0] and row[1]:
                     from datetime import datetime
+
                     min_date = datetime.strptime(row[0][:10], "%Y-%m-%d").date()
                     max_date = datetime.strptime(row[1][:10], "%Y-%m-%d").date()
                     return (min_date, max_date)

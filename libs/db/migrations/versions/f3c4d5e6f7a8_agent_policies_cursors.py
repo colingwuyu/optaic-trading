@@ -4,6 +4,7 @@ Revision ID: f3c4d5e6f7a8
 Revises: e2f4a6b8c9d0
 Create Date: 2025-12-26 16:00:00.000000
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -30,20 +31,26 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"]),
         sa.PrimaryKeyConstraint("tenant_id", "agent_principal_id"),
     )
-    op.create_index("ix_agent_policies_tenant", "agent_policies", ["tenant_id"], unique=False)
+    op.create_index(
+        "ix_agent_policies_tenant", "agent_policies", ["tenant_id"], unique=False
+    )
 
     op.create_table(
         "agent_cursors",
         sa.Column("tenant_id", sa.Uuid(), nullable=False),
         sa.Column("agent_principal_id", sa.Uuid(), nullable=False),
-        sa.Column("last_activity_created_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "last_activity_created_at", sa.DateTime(timezone=True), nullable=True
+        ),
         sa.Column("last_activity_id", sa.Uuid(), nullable=True),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["agent_principal_id"], ["principals.id"]),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"]),
         sa.PrimaryKeyConstraint("tenant_id", "agent_principal_id"),
     )
-    op.create_index("ix_agent_cursors_tenant", "agent_cursors", ["tenant_id"], unique=False)
+    op.create_index(
+        "ix_agent_cursors_tenant", "agent_cursors", ["tenant_id"], unique=False
+    )
 
 
 def downgrade() -> None:

@@ -34,6 +34,7 @@ def test_tcp_check_closed_port() -> None:
 
 def test_http_check_success() -> None:
     """Test HTTP check with successful response."""
+
     # Start a simple HTTP server
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
@@ -106,7 +107,9 @@ def test_service_health_dataclass() -> None:
 
 def test_get_security_warnings_localhost() -> None:
     """Test no warnings for localhost bindings."""
-    warnings = health.get_security_warnings({"api": "127.0.0.1", "prefect": "127.0.0.1"})
+    warnings = health.get_security_warnings(
+        {"api": "127.0.0.1", "prefect": "127.0.0.1"}
+    )
     assert len(warnings) == 0
 
 
@@ -126,5 +129,6 @@ def test_check_prefect_worker_health_no_pid() -> None:
 def test_check_prefect_worker_health_with_pid() -> None:
     """Test worker health check with current process PID."""
     import os
+
     # Current process should be alive
     assert health.check_prefect_worker_health(os.getpid())

@@ -38,7 +38,9 @@ def _installed_state() -> dict[str, object]:
     return {"schema": 1, "tools": {}, "db": {}}
 
 
-def test_plan_upgrades_default_no_redis(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_plan_upgrades_default_no_redis(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     desired = _manifest()
     installed = _installed_state()
     actions = um.plan_upgrades(
@@ -76,7 +78,9 @@ def test_plan_upgrades_default_no_redis(tmp_path: Path, monkeypatch: pytest.Monk
     assert updated["tools"]["redis"]["enabled"] is False
 
 
-def test_apply_upgrades_external_redis(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_apply_upgrades_external_redis(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     desired = _manifest()
     installed = _installed_state()
     redis_url = "redis://127.0.0.1:6380/0"

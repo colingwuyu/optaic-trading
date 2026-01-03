@@ -18,24 +18,26 @@ console = Console()
 @app.command()
 def validate(
     resource_id: str = typer.Option(..., help="ID of the resource to validate"),
-    action: str = typer.Option(..., help="Action being performed (e.g., update, promote)"),
+    action: str = typer.Option(
+        ..., help="Action being performed (e.g., update, promote)"
+    ),
     tenant_id: str = typer.Option(..., help="Tenant ID"),
     principal_id: str = typer.Option(..., help="Actor Principal ID"),
 ):
     """Validate an action on a resource against active guardrails."""
-    
+
     async def _run():
         console.print(f"Validating action '{action}' on resource {resource_id}...")
-        
+
         engine = GuardrailsEngine()
         context = GuardrailsContext(
             tenant_id=UUID(tenant_id),
             actor_principal_id=UUID(principal_id),
             action=action,
-            space_kind=None, # Populate if known
-            subspace_kind=None, # Populate if known
+            space_kind=None,  # Populate if known
+            subspace_kind=None,  # Populate if known
         )
-        
+
         async with AsyncSessionLocal() as db:
             try:
                 # For CLI validation, we pass an empty snapshot or we'd need a way to ingest it.
@@ -51,32 +53,40 @@ def validate(
                     context=context,
                     target_snapshot={},
                 )
-                
+
                 # Commit any report/events
                 await db.commit()
-                
+
                 table = Table(title=f"Validation Report: {report.report_id}")
                 table.add_column("Result", style="cyan")
                 table.add_column("Enforced As", style="magenta")
                 table.add_column("Issues", style="red")
-                
+
                 status = "PASS" if report.ok else "FAIL"
                 if not report.ok and report.enforced_as != "block":
                     status = "WARN"
-                
-                color = "green" if status == "PASS" else "yellow" if status == "WARN" else "red"
-                
+
+                color = (
+                    "green"
+                    if status == "PASS"
+                    else "yellow"
+                    if status == "WARN"
+                    else "red"
+                )
+
                 table.add_row(
                     f"[{color}]{status}[/{color}]",
                     report.enforced_as,
-                    str(len(report.issues))
+                    str(len(report.issues)),
                 )
                 console.print(table)
-                
+
                 if report.issues:
                     console.print("\n[bold red]Issues:[/bold red]")
                     for i, issue in enumerate(report.issues, 1):
-                        console.print(f"{i}. {issue.message} ({issue.code}) at {issue.path}")
+                        console.print(
+                            f"{i}. {issue.message} ({issue.code}) at {issue.path}"
+                        )
 
             except GuardrailsBlocked as e:
                 console.print(f"\n[bold red]BLOCKED: {e}[/bold red]")

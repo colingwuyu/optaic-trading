@@ -83,6 +83,77 @@ async def daily_refresh(dataset_id: UUID, date: str):
 
 See [references/prefect-patterns.md](references/prefect-patterns.md).
 
+## Lineage and Freshness Checking
+
+Before executing a pipeline, check upstream freshness:
+
+```python
+from libs.orchestration import (
+    LineageResolver,
+    FreshnessChecker,
+    UpstreamNotReadyError,
+)
+
+async def run_with_lineage_check(session, dataset_id, force=False):
+    resolver = LineageResolver()
+    checker = FreshnessChecker(status_store)
+
+    # Check upstream freshness
+    report = await resolver.check_upstream_freshness(
+        session, dataset_id, checker
+    )
+
+    if not report.all_ready and not force:
+        raise UpstreamNotReadyError(
+            f"{len(report.blocking_resources)} upstream(s) not ready",
+            blocking_resources=report.blocking_resources,
+        )
+
+    # Execute pipeline
+    result = await execute_pipeline(dataset_id)
+
+    # On success, propagate staleness to downstream
+    await resolver.propagate_staleness(session, dataset_id)
+```
+
+## UpdateFrequency Configuration
+
+Configure expected update frequency for freshness calculations:
+
+```python
+from libs.orchestration import UpdateFrequency
+
+# Daily data, 1 day grace period
+frequency = UpdateFrequency(
+    frequency="daily",
+    grace_period_days=1,
+)
+
+# Business days only (skip weekends)
+frequency = UpdateFrequency(
+    frequency="daily",
+    business_days_only=True,
+    grace_period_days=1,
+)
+
+# Weekly on Monday
+frequency = UpdateFrequency(
+    frequency="weekly",
+    day_of_week=0,  # 0=Monday
+)
+
+# Store in Instance config_json
+config = {
+    "update_frequency": {
+        "frequency": "daily",
+        "business_days_only": True,
+        "grace_period_days": 1,
+    }
+}
+```
+
+See [references/lineage-patterns.md](references/lineage-patterns.md).
+
 ## Data Quality Checks
 
 Standard checks to implement:
@@ -109,3 +180,4 @@ if TYPE_CHECKING:
 - [PIT Patterns](references/pit-patterns.md) - Point-in-time correctness
 - [Prefect Patterns](references/prefect-patterns.md) - Orchestration integration
 - [Quality Checks](references/quality-checks.md) - Data validation
+- [Lineage Patterns](references/lineage-patterns.md) - Dependency and freshness tracking

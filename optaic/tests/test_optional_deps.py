@@ -23,7 +23,6 @@ def test_missing_dependency_error_with_feature() -> None:
     assert "pip install 'optaic[prefect]'" in str(err)
 
 
-
 def test_require_package_success() -> None:
     """Test require_package succeeds for installed package."""
     # json is always available

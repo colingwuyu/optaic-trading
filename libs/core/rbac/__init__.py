@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from libs.core.rbac.models import Permission
 from libs.core.rbac_casbin import authorize_casbin
 
+
 async def authorize(
     session: AsyncSession,
     tenant_id: UUID,
@@ -18,5 +19,6 @@ async def authorize(
     return await authorize_casbin(
         session, tenant_id, actor_principal_id, resource_id, action_perm
     )
+
 
 __all__ = ["authorize", "Permission"]

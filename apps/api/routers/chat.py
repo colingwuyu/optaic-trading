@@ -33,6 +33,7 @@ from libs.db.models.resource import Resource
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
+
 async def get_channel_or_404(
     db: AsyncSession, tenant_id: UUID, channel_id: UUID
 ) -> tuple[Channel, Resource]:
@@ -50,6 +51,7 @@ async def get_channel_or_404(
         raise HTTPException(status_code=404, detail="Channel not found")
     return row[0], row[1]
 
+
 async def get_message_or_404(
     db: AsyncSession, tenant_id: UUID, message_id: UUID
 ) -> Message:
@@ -63,6 +65,7 @@ async def get_message_or_404(
     if not message:
         raise HTTPException(status_code=404, detail="Message not found")
     return message
+
 
 @router.post(
     "/channels",
@@ -133,6 +136,7 @@ async def create_channel(
     channel, _activity = await tx_activity(db, envelope, domain_fn)
     return ChannelOut.model_validate(channel)
 
+
 @router.post("/attachments/upload-init", response_model=AttachmentUploadInitOut)
 async def init_attachment_upload(
     payload: AttachmentUploadInitIn = Body(
@@ -153,6 +157,7 @@ async def init_attachment_upload(
     db: AsyncSession = Depends(get_db),
 ) -> AttachmentUploadInitOut:
     return await create_upload_init(actor, db, payload)
+
 
 @router.get("/channels/{channel_id}/messages", response_model=MessagePage)
 async def list_messages(
@@ -183,7 +188,9 @@ async def list_messages(
                 ),
             )
         )
-    query = query.order_by(Message.created_at.desc(), Message.id.desc()).limit(limit + 1)
+    query = query.order_by(Message.created_at.desc(), Message.id.desc()).limit(
+        limit + 1
+    )
 
     result = await db.scalars(query)
     rows = result.all()
@@ -195,7 +202,10 @@ async def list_messages(
 
     return MessagePage(items=items, next_cursor=next_cursor)
 
-@router.post("/channels/{channel_id}/messages", response_model=MessageOut, status_code=201)
+
+@router.post(
+    "/channels/{channel_id}/messages", response_model=MessageOut, status_code=201
+)
 async def send_message(
     channel_id: UUID,
     payload: MessageCreate = Body(
@@ -251,6 +261,7 @@ async def send_message(
     message, _activity = await tx_activity(db, envelope, domain_fn)
     return MessageOut.model_validate(message)
 
+
 @router.patch("/messages/{message_id}", response_model=MessageOut)
 async def edit_message(
     message_id: UUID,
@@ -263,7 +274,9 @@ async def edit_message(
 ) -> MessageOut:
     message = await get_message_or_404(db, actor.tenant_id, message_id)
     if message.sender_principal_id != actor.id:
-        raise HTTPException(status_code=403, detail="Cannot edit another user's message")
+        raise HTTPException(
+            status_code=403, detail="Cannot edit another user's message"
+        )
     await authorize_or_403(db, actor, Permission.CHANNEL_EDIT_OWN, message.channel_id)
 
     channel_id = message.channel_id
@@ -273,7 +286,9 @@ async def edit_message(
     async def domain_fn(session: AsyncSession) -> Message:
         target = await get_message_or_404(session, actor.tenant_id, message_id)
         if target.sender_principal_id != actor.id:
-            raise HTTPException(status_code=403, detail="Cannot edit another user's message")
+            raise HTTPException(
+                status_code=403, detail="Cannot edit another user's message"
+            )
         target.body = payload.body
         target.body_json = payload.body_json
         target.edited_at = utcnow()
@@ -291,6 +306,7 @@ async def edit_message(
     updated, _activity = await tx_activity(db, envelope, domain_fn)
     return MessageOut.model_validate(updated)
 
+
 @router.delete("/messages/{message_id}", response_model=MessageOut)
 async def delete_message(
     message_id: UUID,
@@ -299,7 +315,9 @@ async def delete_message(
 ) -> MessageOut:
     message = await get_message_or_404(db, actor.tenant_id, message_id)
     if message.sender_principal_id != actor.id:
-        raise HTTPException(status_code=403, detail="Cannot delete another user's message")
+        raise HTTPException(
+            status_code=403, detail="Cannot delete another user's message"
+        )
     await authorize_or_403(db, actor, Permission.CHANNEL_DELETE_OWN, message.channel_id)
 
     channel_id = message.channel_id
@@ -309,7 +327,9 @@ async def delete_message(
     async def domain_fn(session: AsyncSession) -> Message:
         target = await get_message_or_404(session, actor.tenant_id, message_id)
         if target.sender_principal_id != actor.id:
-            raise HTTPException(status_code=403, detail="Cannot delete another user's message")
+            raise HTTPException(
+                status_code=403, detail="Cannot delete another user's message"
+            )
         target.status = "deleted"
         target.edited_at = utcnow()
         await session.flush()
@@ -326,6 +346,7 @@ async def delete_message(
     deleted, _activity = await tx_activity(db, envelope, domain_fn)
     return MessageOut.model_validate(deleted)
 
+
 @router.post("/channels/{channel_id}/read", response_model=ReadReceiptOut)
 async def update_read_receipt(
     channel_id: UUID,
@@ -336,9 +357,13 @@ async def update_read_receipt(
     _channel, _resource = await get_channel_or_404(db, actor.tenant_id, channel_id)
     await authorize_or_403(db, actor, Permission.CHANNEL_VIEW_HISTORY, channel_id)
 
-    message = await get_message_or_404(db, actor.tenant_id, payload.last_read_message_id)
+    message = await get_message_or_404(
+        db, actor.tenant_id, payload.last_read_message_id
+    )
     if message.channel_id != channel_id:
-        raise HTTPException(status_code=400, detail="Message does not belong to channel")
+        raise HTTPException(
+            status_code=400, detail="Message does not belong to channel"
+        )
 
     await reset_session(db)
 

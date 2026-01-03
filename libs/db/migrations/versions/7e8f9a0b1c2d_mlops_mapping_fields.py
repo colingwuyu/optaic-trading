@@ -4,6 +4,7 @@ Revision ID: 7e8f9a0b1c2d
 Revises: f3c4d5e6f7a8
 Create Date: 2025-12-28 15:30:00.000000
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -40,7 +41,9 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"]),
         sa.PrimaryKeyConstraint("resource_id"),
     )
-    op.create_index("ix_training_runs_tenant_id", "training_runs", ["tenant_id"], unique=False)
+    op.create_index(
+        "ix_training_runs_tenant_id", "training_runs", ["tenant_id"], unique=False
+    )
 
     op.create_table(
         "model_versions",
@@ -48,14 +51,20 @@ def upgrade() -> None:
         sa.Column("tenant_id", sa.Uuid(), nullable=False),
         sa.Column("resource_id", sa.Uuid(), nullable=False),
         sa.Column("mlflow_registered_model", sa.String(length=255), nullable=True),
-        sa.Column("mlflow_registered_model_version", sa.String(length=64), nullable=True),
+        sa.Column(
+            "mlflow_registered_model_version", sa.String(length=64), nullable=True
+        ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["resource_id"], ["resources.id"]),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_model_versions_resource_id", "model_versions", ["resource_id"], unique=False)
-    op.create_index("ix_model_versions_tenant_id", "model_versions", ["tenant_id"], unique=False)
+    op.create_index(
+        "ix_model_versions_resource_id", "model_versions", ["resource_id"], unique=False
+    )
+    op.create_index(
+        "ix_model_versions_tenant_id", "model_versions", ["tenant_id"], unique=False
+    )
 
 
 def downgrade() -> None:

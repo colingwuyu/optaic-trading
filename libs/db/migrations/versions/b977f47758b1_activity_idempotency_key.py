@@ -5,14 +5,15 @@ Revises: d76f79849ee9
 Create Date: 2025-12-25 12:06:39.590196
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'b977f47758b1'
-down_revision: Union[str, Sequence[str], None] = 'd76f79849ee9'
+revision: str = "b977f47758b1"
+down_revision: Union[str, Sequence[str], None] = "d76f79849ee9"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -23,14 +24,22 @@ def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "sqlite":
         with op.batch_alter_table("activities") as batch_op:
-            batch_op.drop_constraint(op.f("uq_activities_tenant_correlation"), type_="unique")
+            batch_op.drop_constraint(
+                op.f("uq_activities_tenant_correlation"), type_="unique"
+            )
             batch_op.create_unique_constraint(
                 "uq_activities_tenant_correlation_action_resource",
                 ["tenant_id", "correlation_id", "action", "resource_id"],
             )
     else:
-        op.drop_constraint(op.f('uq_activities_tenant_correlation'), 'activities', type_='unique')
-        op.create_unique_constraint('uq_activities_tenant_correlation_action_resource', 'activities', ['tenant_id', 'correlation_id', 'action', 'resource_id'])
+        op.drop_constraint(
+            op.f("uq_activities_tenant_correlation"), "activities", type_="unique"
+        )
+        op.create_unique_constraint(
+            "uq_activities_tenant_correlation_action_resource",
+            "activities",
+            ["tenant_id", "correlation_id", "action", "resource_id"],
+        )
     # ### end Alembic commands ###
 
 
@@ -49,6 +58,15 @@ def downgrade() -> None:
                 ["tenant_id", "correlation_id"],
             )
     else:
-        op.drop_constraint('uq_activities_tenant_correlation_action_resource', 'activities', type_='unique')
-        op.create_unique_constraint(op.f('uq_activities_tenant_correlation'), 'activities', ['tenant_id', 'correlation_id'], postgresql_nulls_not_distinct=False)
+        op.drop_constraint(
+            "uq_activities_tenant_correlation_action_resource",
+            "activities",
+            type_="unique",
+        )
+        op.create_unique_constraint(
+            op.f("uq_activities_tenant_correlation"),
+            "activities",
+            ["tenant_id", "correlation_id"],
+            postgresql_nulls_not_distinct=False,
+        )
     # ### end Alembic commands ###

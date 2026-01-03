@@ -72,7 +72,11 @@ class JsonSchemaValidator(ContractValidator):
         validator = Draft7Validator(schema)
 
         for error in validator.iter_errors(target_snapshot):
-            path = ".".join(str(p) for p in error.absolute_path) if error.absolute_path else None
+            path = (
+                ".".join(str(p) for p in error.absolute_path)
+                if error.absolute_path
+                else None
+            )
             issues.append(
                 ValidationIssue(
                     severity="error",

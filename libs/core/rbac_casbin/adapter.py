@@ -47,5 +47,7 @@ class CasbinAdapter(Adapter):
     def remove_policy(self, sec, ptype, rule) -> None:  # pragma: no cover - not used
         raise NotImplementedError("CasbinAdapter is read-only.")
 
-    def remove_filtered_policy(self, sec, ptype, field_index, *field_values) -> None:  # pragma: no cover - not used
+    def remove_filtered_policy(
+        self, sec, ptype, field_index, *field_values
+    ) -> None:  # pragma: no cover - not used
         raise NotImplementedError("CasbinAdapter is read-only.")

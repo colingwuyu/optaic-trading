@@ -1,0 +1,478 @@
+"""Lineage resolution for resource dependencies.
+
+Provides dependency tracking and resolution using the dataset_lineage table:
+- Resolve upstream dependencies (what this resource depends on)
+- Resolve downstream dependencies (what depends on this resource)
+- Check freshness of all upstream dependencies before execution
+- Get topologically sorted execution order for DAG execution
+- Propagate staleness when upstream changes
+
+This is the core of the "smart execution" feature where we:
+- Block or warn if upstream dependencies are stale/error
+- Calculate execution order for complex DAGs
+- Invalidate downstream caches when upstream changes
+
+Ported from: optaic-v0/dev_tools/src/data/api.py (lineage logic)
+             optaic-v0/dev_tools/src/core/dag.py (graph traversal)
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Optional
+from uuid import UUID
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from .freshness import DatasetStatus, FreshnessChecker
+
+
+@dataclass
+class LineageFreshnessReport:
+    """Report on freshness of a resource's upstream dependencies."""
+
+    resource_id: UUID
+    all_ready: bool
+    blocking_resources: list[UUID] = field(default_factory=list)
+    status_map: dict[UUID, "DatasetStatus"] = field(default_factory=dict)
+
+
+class UpstreamNotReadyError(Exception):
+    """Raised when upstream dependencies are not ready for execution."""
+
+    def __init__(
+        self,
+        message: str,
+        blocking_resources: list[UUID],
+    ) -> None:
+        self.blocking_resources = blocking_resources
+        super().__init__(message)
+
+
+class LineageResolver:
+    """Resolves resource dependencies using dataset_lineage table.
+
+    The LineageResolver provides methods to:
+    - Traverse the dependency graph (upstream and downstream)
+    - Check freshness of all dependencies before execution
+    - Calculate topologically sorted execution order
+    - Propagate staleness when upstream resources change
+
+    Example usage:
+        resolver = LineageResolver()
+
+        # Get all upstream dependencies
+        upstreams = await resolver.resolve_upstream_dependencies(
+            session, resource_id, recursive=True
+        )
+
+        # Check if all dependencies are ready
+        report = await resolver.check_upstream_freshness(
+            session, resource_id, freshness_checker
+        )
+
+        if not report.all_ready:
+            raise UpstreamNotReadyError(
+                f"{len(report.blocking_resources)} upstreams not ready",
+                report.blocking_resources
+            )
+
+        # Get execution order for DAG
+        batches = await resolver.get_execution_order(session, root_id)
+    """
+
+    async def resolve_upstream_dependencies(
+        self,
+        session: "AsyncSession",
+        resource_id: UUID,
+        *,
+        recursive: bool = True,
+    ) -> list[UUID]:
+        """Get all upstream dependencies for a resource.
+
+        Args:
+            session: Database session
+            resource_id: Resource ID to find dependencies for
+            recursive: If True, find transitive dependencies
+
+        Returns:
+            List of upstream resource IDs (in dependency order if recursive)
+        """
+        from sqlalchemy import select
+
+        from libs.db.models.quant import DatasetLineage
+
+        if not recursive:
+            # Just direct dependencies
+            stmt = select(DatasetLineage.upstream_resource_id).where(
+                DatasetLineage.downstream_resource_id == resource_id
+            )
+            result = await session.execute(stmt)
+            return list(result.scalars().all())
+
+        # Recursive traversal using BFS
+        visited: set[UUID] = set()
+        ordered: list[UUID] = []
+        queue = [resource_id]
+
+        while queue:
+            current_id = queue.pop(0)
+            if current_id in visited:
+                continue
+            visited.add(current_id)
+
+            # Get direct upstreams
+            stmt = select(DatasetLineage.upstream_resource_id).where(
+                DatasetLineage.downstream_resource_id == current_id
+            )
+            result = await session.execute(stmt)
+            upstreams = list(result.scalars().all())
+
+            for upstream_id in upstreams:
+                if upstream_id not in visited:
+                    queue.append(upstream_id)
+                    ordered.append(upstream_id)
+
+        return ordered
+
+    async def resolve_downstream_dependencies(
+        self,
+        session: "AsyncSession",
+        resource_id: UUID,
+        *,
+        recursive: bool = True,
+    ) -> list[UUID]:
+        """Get all downstream dependents for a resource.
+
+        Args:
+            session: Database session
+            resource_id: Resource ID to find dependents for
+            recursive: If True, find transitive dependents
+
+        Returns:
+            List of downstream resource IDs
+        """
+        from sqlalchemy import select
+
+        from libs.db.models.quant import DatasetLineage
+
+        if not recursive:
+            # Just direct dependents
+            stmt = select(DatasetLineage.downstream_resource_id).where(
+                DatasetLineage.upstream_resource_id == resource_id
+            )
+            result = await session.execute(stmt)
+            return list(result.scalars().all())
+
+        # Recursive traversal using BFS
+        visited: set[UUID] = set()
+        ordered: list[UUID] = []
+        queue = [resource_id]
+
+        while queue:
+            current_id = queue.pop(0)
+            if current_id in visited:
+                continue
+            visited.add(current_id)
+
+            # Get direct downstreams
+            stmt = select(DatasetLineage.downstream_resource_id).where(
+                DatasetLineage.upstream_resource_id == current_id
+            )
+            result = await session.execute(stmt)
+            downstreams = list(result.scalars().all())
+
+            for downstream_id in downstreams:
+                if downstream_id not in visited:
+                    queue.append(downstream_id)
+                    ordered.append(downstream_id)
+
+        return ordered
+
+    async def check_upstream_freshness(
+        self,
+        session: "AsyncSession",
+        resource_id: UUID,
+        freshness_checker: "FreshnessChecker",
+    ) -> LineageFreshnessReport:
+        """Check freshness of all upstream dependencies.
+
+        Args:
+            session: Database session
+            resource_id: Resource ID to check dependencies for
+            freshness_checker: FreshnessChecker for calculating staleness
+
+        Returns:
+            FreshnessReport with:
+            - all_ready: True if all upstreams are fresh
+            - blocking_resources: List of stale/error upstream IDs
+            - status_map: Status of each upstream
+        """
+        from .freshness import DatasetStatus
+
+        upstreams = await self.resolve_upstream_dependencies(
+            session, resource_id, recursive=True
+        )
+
+        status_map: dict[UUID, DatasetStatus] = {}
+        blocking_resources: list[UUID] = []
+
+        for upstream_id in upstreams:
+            status = await freshness_checker.calculate_staleness(session, upstream_id)
+            status_map[upstream_id] = status
+
+            if status != DatasetStatus.READY:
+                blocking_resources.append(upstream_id)
+
+        return LineageFreshnessReport(
+            resource_id=resource_id,
+            all_ready=len(blocking_resources) == 0,
+            blocking_resources=blocking_resources,
+            status_map=status_map,
+        )
+
+    async def get_execution_order(
+        self,
+        session: "AsyncSession",
+        root_id: UUID,
+    ) -> list[list[UUID]]:
+        """Get topologically sorted execution order as batches.
+
+        Each batch can run in parallel; batches execute sequentially.
+        Earlier batches have no dependencies; later batches depend on earlier ones.
+
+        Args:
+            session: Database session
+            root_id: Root resource to build execution order from
+
+        Returns:
+            List of batches, where each batch is a list of resource IDs
+            that can execute in parallel
+        """
+        from sqlalchemy import select
+
+        from libs.db.models.quant import DatasetLineage
+
+        # Build the dependency graph
+        all_resources = await self.resolve_upstream_dependencies(
+            session, root_id, recursive=True
+        )
+        all_resources.append(root_id)  # Include root
+
+        # Get all edges
+        stmt = select(
+            DatasetLineage.upstream_resource_id, DatasetLineage.downstream_resource_id
+        ).where(DatasetLineage.downstream_resource_id.in_(all_resources))
+        result = await session.execute(stmt)
+        edges = list(result.all())
+
+        # Build adjacency lists
+        dependencies: dict[UUID, set[UUID]] = {r: set() for r in all_resources}
+        for upstream, downstream in edges:
+            if downstream in dependencies:
+                dependencies[downstream].add(upstream)
+
+        # Kahn's algorithm for topological sort with batching
+        in_degree: dict[UUID, int] = {r: len(deps) for r, deps in dependencies.items()}
+        batches: list[list[UUID]] = []
+
+        while in_degree:
+            # Find all nodes with no dependencies
+            batch = [r for r, deg in in_degree.items() if deg == 0]
+
+            if not batch:
+                # Cycle detected - shouldn't happen with valid data
+                raise ValueError("Cycle detected in dependency graph")
+
+            batches.append(batch)
+
+            # Remove batch nodes and update degrees
+            for r in batch:
+                del in_degree[r]
+                # Reduce in-degree of dependents
+                for other, deps in dependencies.items():
+                    if r in deps:
+                        in_degree[other] -= 1
+
+        return batches
+
+    async def propagate_staleness(
+        self,
+        session: "AsyncSession",
+        resource_id: UUID,
+    ) -> list[UUID]:
+        """Mark downstream dependents as stale when upstream changes.
+
+        This should be called when:
+        - A dataset is refreshed with new data
+        - A pipeline definition changes
+        - An upstream resource is invalidated
+
+        Args:
+            session: Database session
+            resource_id: Resource ID that changed
+
+        Returns:
+            List of affected downstream resource IDs
+        """
+        from libs.db.models.quant import DatasetInstance
+
+        downstreams = await self.resolve_downstream_dependencies(
+            session, resource_id, recursive=True
+        )
+
+        affected: list[UUID] = []
+        for downstream_id in downstreams:
+            dataset = await session.get(DatasetInstance, downstream_id)
+            if dataset and dataset.freshness_status != "stale":
+                dataset.freshness_status = "stale"
+                affected.append(downstream_id)
+
+        if affected:
+            await session.commit()
+
+        return affected
+
+    async def add_lineage_edge(
+        self,
+        session: "AsyncSession",
+        tenant_id: UUID,
+        upstream_id: UUID,
+        downstream_id: UUID,
+        edge_kind: str = "data_dependency",
+    ) -> None:
+        """Add a lineage edge between two resources.
+
+        Args:
+            session: Database session
+            tenant_id: Tenant ID
+            upstream_id: Upstream resource ID
+            downstream_id: Downstream resource ID
+            edge_kind: Type of dependency ("data_dependency", "schema_dependency", etc.)
+        """
+        from libs.db.models.quant import DatasetLineage
+
+        edge = DatasetLineage(
+            tenant_id=tenant_id,
+            upstream_resource_id=upstream_id,
+            downstream_resource_id=downstream_id,
+            edge_kind=edge_kind,
+        )
+        session.add(edge)
+
+    async def remove_lineage_edge(
+        self,
+        session: "AsyncSession",
+        upstream_id: UUID,
+        downstream_id: UUID,
+    ) -> bool:
+        """Remove a lineage edge between two resources.
+
+        Args:
+            session: Database session
+            upstream_id: Upstream resource ID
+            downstream_id: Downstream resource ID
+
+        Returns:
+            True if edge was removed, False if not found
+        """
+        from sqlalchemy import delete
+
+        from libs.db.models.quant import DatasetLineage
+
+        stmt = delete(DatasetLineage).where(
+            DatasetLineage.upstream_resource_id == upstream_id,
+            DatasetLineage.downstream_resource_id == downstream_id,
+        )
+        result = await session.execute(stmt)
+        return result.rowcount > 0
+
+    async def get_lineage_graph(
+        self,
+        session: "AsyncSession",
+        resource_id: UUID,
+        *,
+        direction: str = "both",
+        max_depth: Optional[int] = None,
+    ) -> dict:
+        """Get the lineage graph for a resource.
+
+        Args:
+            session: Database session
+            resource_id: Center resource ID
+            direction: "upstream", "downstream", or "both"
+            max_depth: Maximum depth to traverse (None for unlimited)
+
+        Returns:
+            Dict with nodes and edges for visualization
+        """
+        from libs.db.models import Resource
+
+        nodes: dict[str, dict] = {}
+        edges: list[dict] = []
+
+        # Get resources based on direction
+        if direction in ("upstream", "both"):
+            upstreams = await self.resolve_upstream_dependencies(
+                session, resource_id, recursive=True
+            )
+            for uid in upstreams:
+                resource = await session.get(Resource, uid)
+                if resource:
+                    nodes[str(uid)] = {
+                        "id": str(uid),
+                        "name": resource.name,
+                        "type": resource.type,
+                        "direction": "upstream",
+                    }
+
+        if direction in ("downstream", "both"):
+            downstreams = await self.resolve_downstream_dependencies(
+                session, resource_id, recursive=True
+            )
+            for did in downstreams:
+                resource = await session.get(Resource, did)
+                if resource:
+                    nodes[str(did)] = {
+                        "id": str(did),
+                        "name": resource.name,
+                        "type": resource.type,
+                        "direction": "downstream",
+                    }
+
+        # Add center node
+        center = await session.get(Resource, resource_id)
+        if center:
+            nodes[str(resource_id)] = {
+                "id": str(resource_id),
+                "name": center.name,
+                "type": center.type,
+                "direction": "center",
+            }
+
+        # Get all edges between these nodes
+        from sqlalchemy import select
+
+        from libs.db.models.quant import DatasetLineage
+
+        node_ids = [UUID(nid) for nid in nodes.keys()]
+        stmt = select(DatasetLineage).where(
+            DatasetLineage.upstream_resource_id.in_(node_ids),
+            DatasetLineage.downstream_resource_id.in_(node_ids),
+        )
+        result = await session.execute(stmt)
+        for row in result.scalars().all():
+            edges.append(
+                {
+                    "source": str(row.upstream_resource_id),
+                    "target": str(row.downstream_resource_id),
+                    "kind": row.edge_kind,
+                }
+            )
+
+        return {
+            "nodes": list(nodes.values()),
+            "edges": edges,
+            "center_id": str(resource_id),
+        }

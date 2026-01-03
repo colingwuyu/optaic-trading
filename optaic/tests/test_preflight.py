@@ -52,7 +52,9 @@ def test_run_preflight_no_engines(tmp_path: Path) -> None:
 
 
 @patch("optaic.runtime.engine_migrations.migrate_prefect_db")
-def test_run_preflight_prefect_local_success(mock_migrate: MagicMock, tmp_path: Path) -> None:
+def test_run_preflight_prefect_local_success(
+    mock_migrate: MagicMock, tmp_path: Path
+) -> None:
     """Test preflight with successful Prefect migration."""
     mock_migrate.return_value = MagicMock(
         success=True,
@@ -68,7 +70,9 @@ def test_run_preflight_prefect_local_success(mock_migrate: MagicMock, tmp_path: 
 
 
 @patch("optaic.runtime.engine_migrations.migrate_prefect_db")
-def test_run_preflight_prefect_migration_failure(mock_migrate: MagicMock, tmp_path: Path) -> None:
+def test_run_preflight_prefect_migration_failure(
+    mock_migrate: MagicMock, tmp_path: Path
+) -> None:
     """Test preflight fails when Prefect migration fails."""
     mock_migrate.return_value = MagicMock(
         success=False,
@@ -88,7 +92,9 @@ def test_run_preflight_prefect_migration_failure(mock_migrate: MagicMock, tmp_pa
 
 
 @patch("optaic.runtime.engine_migrations.migrate_mlflow_db")
-def test_run_preflight_mlflow_local_success(mock_migrate: MagicMock, tmp_path: Path) -> None:
+def test_run_preflight_mlflow_local_success(
+    mock_migrate: MagicMock, tmp_path: Path
+) -> None:
     """Test preflight with successful MLflow migration."""
     mock_migrate.return_value = MagicMock(
         success=True,
@@ -115,14 +121,15 @@ def test_run_preflight_remote_mode_skips_migration(tmp_path: Path) -> None:
     )
 
     # Should not call any migrations
-    with patch("optaic.runtime.engine_migrations.migrate_prefect_db") as mock_prefect, \
-         patch("optaic.runtime.engine_migrations.migrate_mlflow_db") as mock_mlflow:
+    with (
+        patch("optaic.runtime.engine_migrations.migrate_prefect_db") as mock_prefect,
+        patch("optaic.runtime.engine_migrations.migrate_mlflow_db") as mock_mlflow,
+    ):
         result = preflight.run_preflight(config)
 
         assert result.success
         mock_prefect.assert_not_called()
         mock_mlflow.assert_not_called()
-
 
 
 def test_format_migration_error() -> None:

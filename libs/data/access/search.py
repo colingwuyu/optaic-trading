@@ -34,7 +34,7 @@ class UniverseSearchRequest(BaseRequest):
                 },
                 {
                     "pattern": ".*Index$",
-                }
+                },
             ]
         }
     )

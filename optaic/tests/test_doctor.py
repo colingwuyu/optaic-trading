@@ -42,7 +42,9 @@ def test_doctor_report_has_errors() -> None:
     report = doctor.DoctorReport(data_dir="/test", checked_at="now")
     assert not report.has_errors()
 
-    report.items.append(doctor.DiagnosticItem(name="test", status="error", message="fail"))
+    report.items.append(
+        doctor.DiagnosticItem(name="test", status="error", message="fail")
+    )
     assert report.has_errors()
 
 
@@ -51,7 +53,9 @@ def test_doctor_report_has_warnings() -> None:
     report = doctor.DoctorReport(data_dir="/test", checked_at="now")
     assert not report.has_warnings()
 
-    report.items.append(doctor.DiagnosticItem(name="test", status="warn", message="warning"))
+    report.items.append(
+        doctor.DiagnosticItem(name="test", status="warn", message="warning")
+    )
     assert report.has_warnings()
 
 
@@ -141,12 +145,17 @@ def test_check_last_migration_with_state(tmp_path: Path) -> None:
     state_dir = tmp_path / "engines"
     state_dir.mkdir(parents=True)
     state_file = state_dir / "engines_state.json"
-    state_file.write_text(json.dumps({
-        "prefect": {
-            "package_version": "2.0.0",
-            "last_migration_at": "2024-01-01T00:00:00Z",
-        }
-    }), encoding="utf-8")
+    state_file.write_text(
+        json.dumps(
+            {
+                "prefect": {
+                    "package_version": "2.0.0",
+                    "last_migration_at": "2024-01-01T00:00:00Z",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
 
     items = doctor._check_last_migration(tmp_path)
     assert any("Prefect" in item.name for item in items)

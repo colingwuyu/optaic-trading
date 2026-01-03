@@ -58,7 +58,9 @@ from .runtime.package_update import (
 )
 from .version import get_version
 
-app = typer.Typer(add_completion=False, no_args_is_help=True, invoke_without_command=True)
+app = typer.Typer(
+    add_completion=False, no_args_is_help=True, invoke_without_command=True
+)
 
 
 @dataclass(frozen=True)
@@ -190,13 +192,9 @@ def server(
     api_port = port or settings.api_port
     data_dir.mkdir(parents=True, exist_ok=True)
     database_url = resolve_database_url(settings, data_dir)
-    resolved_with_redis = (
-        with_redis if with_redis is not None else settings.with_redis
-    )
+    resolved_with_redis = with_redis if with_redis is not None else settings.with_redis
     resolved_redis_url = redis_url if redis_url is not None else settings.redis_url
-    resolved_redis_port = (
-        redis_port if redis_port is not None else settings.redis_port
-    )
+    resolved_redis_port = redis_port if redis_port is not None else settings.redis_port
     resolved_redis_bind = redis_bind if redis_bind is not None else settings.redis_bind
     resolved_redis_version = (
         redis_version if redis_version is not None else settings.redis_version
@@ -207,18 +205,12 @@ def server(
     resolved_with_prefect = (
         with_prefect
         if with_prefect is not None
-        else (
-            runtime_config.prefect.enabled
-            or bool(runtime_config.prefect.api_url)
-        )
+        else (runtime_config.prefect.enabled or bool(runtime_config.prefect.api_url))
     )
     resolved_with_mlflow = (
         with_mlflow
         if with_mlflow is not None
-        else (
-            runtime_config.mlflow.enabled
-            or bool(runtime_config.mlflow.tracking_uri)
-        )
+        else (runtime_config.mlflow.enabled or bool(runtime_config.mlflow.tracking_uri))
     )
     runtime_config.prefect.enabled = resolved_with_prefect
     runtime_config.mlflow.enabled = resolved_with_mlflow
@@ -454,16 +446,14 @@ def upgrade(
             )
             raise typer.Exit(code=1)
 
-    resolved_with_redis = (
-        with_redis if with_redis is not None else settings.with_redis
-    )
+    resolved_with_redis = with_redis if with_redis is not None else settings.with_redis
     resolved_redis_url = settings.redis_url
     resolved_redis_flavor = settings.redis_flavor
-    resolved_with_prefect = (
-        runtime_config.prefect.enabled or bool(runtime_config.prefect.api_url)
+    resolved_with_prefect = runtime_config.prefect.enabled or bool(
+        runtime_config.prefect.api_url
     )
-    resolved_with_mlflow = (
-        runtime_config.mlflow.enabled or bool(runtime_config.mlflow.tracking_uri)
+    resolved_with_mlflow = runtime_config.mlflow.enabled or bool(
+        runtime_config.mlflow.tracking_uri
     )
 
     package_update = None
@@ -516,7 +506,11 @@ def upgrade(
             centrifugo_override=centrifugo_override,
         )
     except Exception as exc:
-        if resolved_with_redis and not sys.platform.startswith("win") and not resolved_redis_url:
+        if (
+            resolved_with_redis
+            and not sys.platform.startswith("win")
+            and not resolved_redis_url
+        ):
             typer.echo(
                 "Redis is enabled without --redis-url. Provide --redis-url or "
                 "disable --with-redis on non-Windows.",
@@ -573,9 +567,15 @@ def upgrade(
         )
         installed_state = update_db_state(installed_state, database_url)
         write_installed_state(data_dir, installed_state)
-        if check_package_updates and package_update and package_update.get("has_update"):
+        if (
+            check_package_updates
+            and package_update
+            and package_update.get("has_update")
+        ):
             latest_version = str(package_update.get("latest_version"))
-            downloads_dir = data_dir / "downloads" / settings.package_name / latest_version
+            downloads_dir = (
+                data_dir / "downloads" / settings.package_name / latest_version
+            )
             if resolved_index_url:
                 wheel_path = download_wheel_from_index(
                     resolved_index_url,
@@ -766,7 +766,9 @@ def _check_redis(settings: Settings) -> tuple[str, str]:
         return f"error: {exc}", "unknown"
     if resolved == "disabled":
         return "disabled", "memory"
-    redis_url = settings.redis_url or f"redis://{settings.redis_bind}:{settings.redis_port}/0"
+    redis_url = (
+        settings.redis_url or f"redis://{settings.redis_bind}:{settings.redis_port}/0"
+    )
     status, version = check_redis(redis_url)
     if status != "ok":
         return status, "redis"
@@ -975,7 +977,9 @@ def _spawn_self_upgrade(job_path: Path, server_pid: int | None) -> None:
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
     else:
         start_new_session = True
-    subprocess.Popen(cmd, creationflags=creationflags, start_new_session=start_new_session)
+    subprocess.Popen(
+        cmd, creationflags=creationflags, start_new_session=start_new_session
+    )
 
 
 def _terminate_server_pid(server_pid: int) -> None:
@@ -1005,9 +1009,7 @@ def _resolve_tool_binary(tool: RollbackTool, version_dir: Path) -> Path:
     for candidate in version_dir.rglob(name):
         if candidate.is_file():
             return candidate
-    raise FileNotFoundError(
-        f"{tool.value} binary not found in {version_dir}"
-    )
+    raise FileNotFoundError(f"{tool.value} binary not found in {version_dir}")
 
 
 def _restart_server(

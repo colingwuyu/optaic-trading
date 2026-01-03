@@ -23,9 +23,13 @@ class Run(Base):
 
     __tablename__ = "runs"
 
-    resource_id: Mapped[UUID] = mapped_column(ForeignKey("resources.id"), primary_key=True)
+    resource_id: Mapped[UUID] = mapped_column(
+        ForeignKey("resources.id"), primary_key=True
+    )
     tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
 
     # Status and execution tracking
     status: Mapped[str] = mapped_column(
@@ -34,10 +38,16 @@ class Run(Base):
     status_updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow
     )
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     error_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    requested_by_principal_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    requested_by_principal_id: Mapped[str | None] = mapped_column(
+        String(128), nullable=True
+    )
 
     # Adapter-friendly orchestrator mapping
     orchestrator_kind: Mapped[str | None] = mapped_column(
@@ -68,9 +78,13 @@ class TrainingRun(Base):
 
     __tablename__ = "training_runs"
 
-    resource_id: Mapped[UUID] = mapped_column(ForeignKey("resources.id"), primary_key=True)
+    resource_id: Mapped[UUID] = mapped_column(
+        ForeignKey("resources.id"), primary_key=True
+    )
     tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
 
     # Adapter-friendly tracking mapping
     tracking_kind: Mapped[str | None] = mapped_column(
@@ -84,7 +98,9 @@ class TrainingRun(Base):
     # DEPRECATED: kept for backward compatibility, use tracking_* instead
     mlflow_run_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
-    __table_args__ = (Index("ix_training_runs_tenant_resource", "tenant_id", "resource_id"),)
+    __table_args__ = (
+        Index("ix_training_runs_tenant_resource", "tenant_id", "resource_id"),
+    )
 
 
 class ModelVersion(Base):
@@ -101,23 +117,30 @@ class ModelVersion(Base):
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
     resource_id: Mapped[UUID] = mapped_column(ForeignKey("resources.id"), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
 
     # Adapter-friendly registry mapping
     registry_kind: Mapped[str | None] = mapped_column(
         String(64), nullable=True
     )  # e.g., "mlflow", "sagemaker"
     registry_model_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    registry_model_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    registry_model_version: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
     registry_model_uri: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     registry_meta_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # DEPRECATED: kept for backward compatibility, use registry_* instead
-    mlflow_registered_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    mlflow_registered_model: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
     mlflow_registered_model_version: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,
     )
 
-    __table_args__ = (Index("ix_model_versions_tenant_resource", "tenant_id", "resource_id"),)
-
+    __table_args__ = (
+        Index("ix_model_versions_tenant_resource", "tenant_id", "resource_id"),
+    )

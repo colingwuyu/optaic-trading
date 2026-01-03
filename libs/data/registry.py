@@ -72,9 +72,7 @@ class FactoryRegistry(Generic[T]):
                     f"Registered {self.namespace} '{key}' must inherit from {self.base_type}."
                 )
         elif not callable(constructor):
-            raise TypeError(
-                f"Registered {self.namespace} '{key}' must be callable."
-            )
+            raise TypeError(f"Registered {self.namespace} '{key}' must be callable.")
 
     def keys(self) -> tuple[str, ...]:
         self._ensure_auto_discovery()

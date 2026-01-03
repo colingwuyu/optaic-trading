@@ -192,6 +192,7 @@ class DatasetsClient:
         Returns:
             Dataset preview with columns, data, row_count, truncated
         """
+
         # Convert dates to ISO format strings
         def _date_str(d: Optional[date | str]) -> Optional[str]:
             if d is None:

@@ -7,6 +7,7 @@ from libs.core.logging_config import configure_logging
 from libs.core.settings import get_settings
 from libs.db.session import AsyncSessionLocal
 
+
 async def worker_loop() -> None:
     settings = get_settings()
     configure_logging(settings)
@@ -24,6 +25,7 @@ async def worker_loop() -> None:
 
         if processed == 0:
             await asyncio.sleep(2)
+
 
 if __name__ == "__main__":
     asyncio.run(worker_loop())

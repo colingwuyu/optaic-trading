@@ -57,7 +57,9 @@ class CentrifugoPublisher:
         self.base_delay = base_delay
         self.logger = structlog.get_logger("worker.centrifugo")
 
-    async def publish_channels(self, channels: Iterable[str], data: Dict[str, object]) -> None:
+    async def publish_channels(
+        self, channels: Iterable[str], data: Dict[str, object]
+    ) -> None:
         channels_list = list(channels)
         if not channels_list:
             return
@@ -253,7 +255,9 @@ def build_activity_handler(publisher: Optional[CentrifugoPublisher]) -> Handler:
             resource_id = _coerce_uuid(resource.get("resource_id"))
             watchers: set[UUID] = set()
             if resource_id is not None:
-                watchers |= await _subscription_watchers(session, tenant_id, resource_id)
+                watchers |= await _subscription_watchers(
+                    session, tenant_id, resource_id
+                )
 
             action = str(payload.get("action") or "")
             if action.startswith(_CHAT_ACTION_PREFIXES):
@@ -301,13 +305,13 @@ async def fetch_outbox_batch(
         stmt = stmt.where(Outbox.topic == topic)
 
     stmt = stmt.order_by(Outbox.created_at)
-    
+
     # Check for SQLite
     is_sqlite = getattr(session.bind.dialect, "name", "") == "sqlite"
-    
+
     if not is_sqlite:
         stmt = stmt.with_for_update(skip_locked=True)
-    
+
     stmt = stmt.limit(batch_size)
     result = await session.scalars(stmt)
     return list(result.all())

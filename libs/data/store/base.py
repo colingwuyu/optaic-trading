@@ -122,9 +122,7 @@ class BaseStore(ABC):
 
     def clear(self) -> None:
         """Clear all data from the store."""
-        raise NotImplementedError(
-            f"Clear not supported by {self.__class__.__name__}"
-        )
+        raise NotImplementedError(f"Clear not supported by {self.__class__.__name__}")
 
     def delete(self) -> None:
         """Delete the physical store (file, table, etc.).

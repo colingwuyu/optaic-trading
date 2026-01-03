@@ -131,7 +131,9 @@ async def create_merge_request(
     )
     if not is_versioned_type(target_resource.type):
         raise HTTPException(status_code=400, detail="Target resource is not versioned")
-    await authorize_or_403(db, actor, Permission.MERGE_REQUEST_CREATE, target_resource.id)
+    await authorize_or_403(
+        db, actor, Permission.MERGE_REQUEST_CREATE, target_resource.id
+    )
     target_resource_id = target_resource.id
     target_resource_type = target_resource.type
 
@@ -162,7 +164,9 @@ async def create_merge_request(
     await reset_session(db)
 
     async def domain_fn(session: AsyncSession) -> MergeRequest:
-        resource_name = payload.title or f"Merge {payload.source_ref} into {payload.target_ref}"
+        resource_name = (
+            payload.title or f"Merge {payload.source_ref} into {payload.target_ref}"
+        )
         mr_resource = Resource(
             id=mr_resource_id,
             tenant_id=actor.tenant_id,
@@ -244,7 +248,9 @@ async def approve_merge_request(
     db: AsyncSession = Depends(get_db),
 ) -> MergeApprovalOut:
     mr = await _get_merge_request(db, actor.tenant_id, mr_id)
-    target_resource = await get_resource_or_404(db, actor.tenant_id, mr.target_resource_id)
+    target_resource = await get_resource_or_404(
+        db, actor.tenant_id, mr.target_resource_id
+    )
     target_resource_type = target_resource.type
     target_resource_id = target_resource.id
     mr_resource_id = mr.mr_resource_id
@@ -364,15 +370,17 @@ async def merge_merge_request(
     if rejects > 0 or approvals < mr.required_approvals:
         raise HTTPException(status_code=400, detail="Merge request not approved")
 
-    target_resource = await get_resource_or_404(
-        db, actor.tenant_id, target_resource_id
-    )
+    target_resource = await get_resource_or_404(db, actor.tenant_id, target_resource_id)
     if not is_versioned_type(target_resource.type):
         raise HTTPException(status_code=400, detail="Target resource is not versioned")
     target_resource_type = target_resource.type
 
-    source_ref = await _get_ref(db, actor.tenant_id, target_resource_id, source_ref_name)
-    target_ref = await _get_ref(db, actor.tenant_id, target_resource_id, target_ref_name)
+    source_ref = await _get_ref(
+        db, actor.tenant_id, target_resource_id, source_ref_name
+    )
+    target_ref = await _get_ref(
+        db, actor.tenant_id, target_resource_id, target_ref_name
+    )
 
     source_head = await db.scalars(
         select(ResourceVersion).where(ResourceVersion.id == source_ref.head_version_id)

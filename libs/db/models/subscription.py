@@ -19,8 +19,12 @@ class Subscription(Base):
     principal_id: Mapped[UUID] = mapped_column(ForeignKey("principals.id"), index=True)
     resource_id: Mapped[UUID] = mapped_column(ForeignKey("resources.id"), index=True)
     scope: Mapped[str] = mapped_column(String(20))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     __table_args__ = (
         Index(

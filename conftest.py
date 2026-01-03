@@ -8,6 +8,7 @@ Sets up the testing environment including:
 
 Per devops_deployment.md: Use SQLite fixtures with tempfile.TemporaryDirectory() for embedded tests.
 """
+
 import os
 import tempfile
 from pathlib import Path
@@ -33,9 +34,10 @@ def pytest_configure(config):
     """Configure pytest before test collection."""
     # Register custom markers
     config.addinivalue_line("markers", "integration: marks tests as integration tests")
-    
+
     # Clear the settings cache so it picks up our test DATABASE_URL
     from libs.core.settings import get_settings
+
     get_settings.cache_clear()
 
 
@@ -51,36 +53,36 @@ def _set_sqlite_pragmas(dbapi_connection, _connection_record):
 @pytest_asyncio.fixture(scope="session")
 async def test_engine():
     """Create a shared async engine for all tests.
-    
+
     This is session-scoped to avoid recreating the engine for every test.
     Creates the complete database schema for full test coverage.
     """
     from libs.core.settings import get_settings
     from libs.db.base import Base
-    
+
     # Import all models so they register with Base.metadata
     import libs.db.models  # noqa: F401
-    
+
     settings = get_settings()
     engine = create_async_engine(
         settings.database_url,
         echo=False,
         poolclass=NullPool,
     )
-    
+
     # Create all tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    
+
     yield engine
-    
+
     await engine.dispose()
 
 
 @pytest_asyncio.fixture(scope="function")
 async def db_session(test_engine) -> AsyncSession:
     """Create an async database session for each test.
-    
+
     Each test gets a fresh transaction that is rolled back after the test.
     This ensures test isolation without recreating the database.
     """
@@ -90,7 +92,7 @@ async def db_session(test_engine) -> AsyncSession:
         expire_on_commit=False,
         autoflush=False,
     )
-    
+
     async with async_session_factory() as session:
         # Use nested transaction for proper rollback
         async with session.begin():
@@ -101,13 +103,13 @@ async def db_session(test_engine) -> AsyncSession:
 @pytest.fixture(scope="session", autouse=True)
 def patch_async_session_local(test_engine):
     """Patch AsyncSessionLocal to use the test engine.
-    
+
     This allows code that imports AsyncSessionLocal directly to use the test database.
     """
     from libs.db import session as session_module
-    
+
     original_factory = session_module.AsyncSessionLocal
-    
+
     # Create a new session factory with the test engine
     test_factory = async_sessionmaker(
         bind=test_engine,
@@ -115,11 +117,11 @@ def patch_async_session_local(test_engine):
         expire_on_commit=False,
         autoflush=False,
     )
-    
+
     session_module.AsyncSessionLocal = test_factory
-    
+
     yield
-    
+
     session_module.AsyncSessionLocal = original_factory
 
 
@@ -128,8 +130,9 @@ def setup_test_environment(test_engine):
     """Setup test environment for the entire session."""
     # test_engine fixture handles table creation via implicit dependency
     yield
-    
+
     # Cleanup
     import shutil
+
     if os.path.exists(_test_db_dir):
         shutil.rmtree(_test_db_dir, ignore_errors=True)

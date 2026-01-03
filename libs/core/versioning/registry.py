@@ -51,7 +51,9 @@ def get_content_model(resource_type: str) -> Optional[Type[BaseModel]]:
     return _VERSIONED_TYPES.get(resource_type)
 
 
-def serialize_content(resource_type: str, content: BaseModel | Dict[str, Any]) -> Dict[str, Any]:
+def serialize_content(
+    resource_type: str, content: BaseModel | Dict[str, Any]
+) -> Dict[str, Any]:
     model_type = get_content_model(resource_type)
     if model_type is None:
         raise ValueError(f"Resource type '{resource_type}' is not versioned")
@@ -84,13 +86,17 @@ def _merge_strategy(target: Dict[str, Any], source: Dict[str, Any]) -> str:
     return "source_wins"
 
 
-def _merge_source_wins(target: Dict[str, Any], source: Dict[str, Any]) -> Dict[str, Any]:
+def _merge_source_wins(
+    target: Dict[str, Any], source: Dict[str, Any]
+) -> Dict[str, Any]:
     merged = dict(target)
     merged.update(source)
     return merged
 
 
-def _merge_target_wins(target: Dict[str, Any], source: Dict[str, Any]) -> Dict[str, Any]:
+def _merge_target_wins(
+    target: Dict[str, Any], source: Dict[str, Any]
+) -> Dict[str, Any]:
     merged = dict(source)
     merged.update(target)
     return merged

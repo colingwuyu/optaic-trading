@@ -7,7 +7,6 @@ Tests verify:
 - Factory integration
 """
 
-
 from apps.api.services import (
     DatasetService,
     ExperimentService,
@@ -254,7 +253,9 @@ class TestCodeRefIntegration:
         from libs.data.registry import ACCESSOR_FACTORY
 
         for accessor in BUILT_IN_ACCESSORS:
-            assert accessor["code_ref"] in ACCESSOR_FACTORY, f"Missing: {accessor['code_ref']}"
+            assert accessor["code_ref"] in ACCESSOR_FACTORY, (
+                f"Missing: {accessor['code_ref']}"
+            )
 
     def test_op_code_refs_exist(self):
         """All seeded op code_refs should exist in registry."""

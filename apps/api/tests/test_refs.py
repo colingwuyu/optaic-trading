@@ -91,8 +91,7 @@ async def test_branch_create_list_delete_writes_activity_and_outbox():
         )
         outbox_payloads = [row.payload for row in outbox_rows.all()]
         assert any(
-            payload.get("action") == "branch.created"
-            for payload in outbox_payloads
+            payload.get("action") == "branch.created" for payload in outbox_payloads
         )
 
 

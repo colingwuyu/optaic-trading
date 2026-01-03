@@ -10,7 +10,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="", case_sensitive=False)
 
-    mode: Literal["embedded", "prod"] = Field(default="embedded", validation_alias="MODE")
+    mode: Literal["embedded", "prod"] = Field(
+        default="embedded", validation_alias="MODE"
+    )
     database_url: str | None = Field(default=None, validation_alias="DATABASE_URL")
     centrifugo_port: int = Field(default=8001, validation_alias="CENTRIFUGO_PORT")
     centrifugo_api_key: str | None = Field(

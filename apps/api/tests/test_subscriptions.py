@@ -156,8 +156,7 @@ async def test_subscription_allows_activity_visibility():
         )
         assert feed_response.status_code == 200
         resource_ids = {
-            item["resource"]["resource_id"]
-            for item in feed_response.json()["items"]
+            item["resource"]["resource_id"] for item in feed_response.json()["items"]
         }
         assert space_a_id in resource_ids
         assert space_b_id in resource_ids

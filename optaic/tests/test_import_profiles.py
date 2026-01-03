@@ -26,11 +26,24 @@ def test_pyproject_has_all_extras() -> None:
     extras = data["project"]["optional-dependencies"]
 
     # Required extras
-    required = {"sdk", "client", "server", "realtime", "prefect", "mlflow",
-                "redis", "storage", "engines", "all", "full", "dev"}
+    required = {
+        "sdk",
+        "client",
+        "server",
+        "realtime",
+        "prefect",
+        "mlflow",
+        "redis",
+        "storage",
+        "engines",
+        "all",
+        "full",
+        "dev",
+    }
 
-    assert required.issubset(set(extras.keys())), \
+    assert required.issubset(set(extras.keys())), (
         f"Missing extras: {required - set(extras.keys())}"
+    )
 
 
 def test_extras_client_is_alias_for_sdk() -> None:
@@ -67,18 +80,21 @@ def test_extras_engines_has_prefect_and_mlflow() -> None:
 def test_optaic_import_succeeds() -> None:
     """Test that importing optaic succeeds."""
     import optaic
+
     assert optaic is not None
 
 
 def test_optaic_runtime_import_succeeds() -> None:
     """Test that importing optaic.runtime modules succeeds."""
     from optaic.runtime import optional_deps as od
+
     assert od is not None
 
 
 def test_optional_deps_require_returns_module() -> None:
     """Test require() returns the module."""
     import json
+
     result = optional_deps.require("json", "server", purpose="test")
     assert result is json
 
@@ -95,8 +111,7 @@ def test_optional_deps_require_raises_with_message() -> None:
 
 
 @pytest.mark.skipif(
-    not optional_deps.is_package_available("prefect"),
-    reason="prefect not installed"
+    not optional_deps.is_package_available("prefect"), reason="prefect not installed"
 )
 def test_require_prefect_returns_module() -> None:
     """Test require_prefect returns prefect module when available."""
@@ -106,8 +121,7 @@ def test_require_prefect_returns_module() -> None:
 
 
 @pytest.mark.skipif(
-    not optional_deps.is_package_available("mlflow"),
-    reason="mlflow not installed"
+    not optional_deps.is_package_available("mlflow"), reason="mlflow not installed"
 )
 def test_require_mlflow_returns_module() -> None:
     """Test require_mlflow returns mlflow module when available."""
@@ -146,8 +160,10 @@ def test_optional_deps_module_has_no_heavy_imports() -> None:
     for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                assert alias.name.split(".")[0] not in heavy_deps, \
+                assert alias.name.split(".")[0] not in heavy_deps, (
                     f"optional_deps.py has top-level import of {alias.name}"
+                )
         elif isinstance(node, ast.ImportFrom) and node.module:
-            assert node.module.split(".")[0] not in heavy_deps, \
+            assert node.module.split(".")[0] not in heavy_deps, (
                 f"optional_deps.py has top-level import from {node.module}"
+            )

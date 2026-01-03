@@ -155,8 +155,12 @@ class SignalService:
             "allow_nan": spec.allow_nan,
             "index_schema": spec.index_schema_json,
             "source_expression": spec.source_expression,
-            "freshness_status": dataset_instance.freshness_status if dataset_instance else None,
-            "last_data_date": str(dataset_instance.last_data_date) if dataset_instance and dataset_instance.last_data_date else None,
+            "freshness_status": dataset_instance.freshness_status
+            if dataset_instance
+            else None,
+            "last_data_date": str(dataset_instance.last_data_date)
+            if dataset_instance and dataset_instance.last_data_date
+            else None,
         }
 
     async def validate_signal(
@@ -186,7 +190,12 @@ class SignalService:
         if not spec or spec.tenant_id != actor.tenant_id:
             return {
                 "valid": False,
-                "issues": [{"code": "SIGNAL_NOT_FOUND", "message": f"Signal {signal_id} not found"}],
+                "issues": [
+                    {
+                        "code": "SIGNAL_NOT_FOUND",
+                        "message": f"Signal {signal_id} not found",
+                    }
+                ],
             }
 
         issues = []
@@ -195,27 +204,33 @@ class SignalService:
         if spec.min_value is not None:
             below_min = (data < spec.min_value).any().any()
             if below_min:
-                issues.append({
-                    "code": "BELOW_MIN",
-                    "message": f"Values below minimum {spec.min_value}",
-                })
+                issues.append(
+                    {
+                        "code": "BELOW_MIN",
+                        "message": f"Values below minimum {spec.min_value}",
+                    }
+                )
 
         if spec.max_value is not None:
             above_max = (data > spec.max_value).any().any()
             if above_max:
-                issues.append({
-                    "code": "ABOVE_MAX",
-                    "message": f"Values above maximum {spec.max_value}",
-                })
+                issues.append(
+                    {
+                        "code": "ABOVE_MAX",
+                        "message": f"Values above maximum {spec.max_value}",
+                    }
+                )
 
         # Check NaN
         if not spec.allow_nan:
             has_nan = data.isna().any().any()
             if has_nan:
-                issues.append({
-                    "code": "CONTAINS_NAN",
-                    "message": "Signal contains NaN values but allow_nan=False",
-                })
+                issues.append(
+                    {
+                        "code": "CONTAINS_NAN",
+                        "message": "Signal contains NaN values but allow_nan=False",
+                    }
+                )
 
         # Emit validation activity
         envelope = ActivityEnvelope(
@@ -279,9 +294,9 @@ class SignalService:
             # Existing code hardcoded 'active'. Let's relax it or default to active.
             # Usually list endpoints without status filter return all non-deleted?
             # Let's match original behavior if status is None -> 'active'
-            # But wait, Router default in signals.py is None. 
+            # But wait, Router default in signals.py is None.
             # If I want to see 'registered' signals I need to pass status='registered'.
-            # If status is None, maybe return all? 
+            # If status is None, maybe return all?
             # Original code: where(Resource.status == "active")
             # Usually users might want to see 'active' by default.
             stmt = stmt.where(Resource.status == "active")
@@ -298,14 +313,18 @@ class SignalService:
         for resource, spec in rows:
             # Optionally get dataset freshness
             dataset_instance = await session.get(DatasetInstance, resource.id)
-            signals.append({
-                "id": str(resource.id),
-                "name": resource.name,
-                "min_value": spec.min_value,
-                "max_value": spec.max_value,
-                "allow_nan": spec.allow_nan,
-                "freshness_status": dataset_instance.freshness_status if dataset_instance else None,
-            })
+            signals.append(
+                {
+                    "id": str(resource.id),
+                    "name": resource.name,
+                    "min_value": spec.min_value,
+                    "max_value": spec.max_value,
+                    "allow_nan": spec.allow_nan,
+                    "freshness_status": dataset_instance.freshness_status
+                    if dataset_instance
+                    else None,
+                }
+            )
 
         return signals
 

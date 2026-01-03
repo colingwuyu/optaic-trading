@@ -6,6 +6,7 @@ from httpx import ASGITransport, AsyncClient
 from apps.api.main import app
 from libs.core.rbac.models import Permission
 
+
 @pytest.mark.asyncio
 async def test_healthz():
     async with AsyncClient(
@@ -15,6 +16,7 @@ async def test_healthz():
         response = await client.get("/healthz")
         assert response.status_code == 200
         assert response.json()["ok"] is True
+
 
 @pytest.mark.asyncio
 async def test_resource_activity_and_rbac_flow():
@@ -145,6 +147,7 @@ async def test_resource_activity_and_rbac_flow():
         assert viewer_feed.status_code == 200
         viewer_actions = {item["action"] for item in viewer_feed.json()["items"]}
         assert "resource.created" in viewer_actions
+
 
 @pytest.mark.asyncio
 async def test_tenant_list_scoped_to_principal():

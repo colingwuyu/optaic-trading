@@ -31,7 +31,6 @@ def _get_optaic_version() -> str:
         return "unknown"
 
 
-
 # ─────────────────────────────────────────────────────────────
 # Installed state (what is configured)
 # ─────────────────────────────────────────────────────────────
@@ -84,7 +83,9 @@ def get_installed_state(config: RuntimeConfig) -> InstalledState:
         version=prefect_version,
         mode=prefect_mode,
         port=config.prefect.port if prefect_mode == "local" else None,
-        data_path=str(data_dir / "engines" / "prefect") if prefect_mode == "local" else None,
+        data_path=str(data_dir / "engines" / "prefect")
+        if prefect_mode == "local"
+        else None,
     )
     if prefect_mode == "local":
         ports["prefect"] = config.prefect.port
@@ -97,7 +98,9 @@ def get_installed_state(config: RuntimeConfig) -> InstalledState:
         version=mlflow_version,
         mode=mlflow_mode,
         port=config.mlflow.port if mlflow_mode == "local" else None,
-        data_path=str(data_dir / "engines" / "mlflow") if mlflow_mode == "local" else None,
+        data_path=str(data_dir / "engines" / "mlflow")
+        if mlflow_mode == "local"
+        else None,
     )
     if mlflow_mode == "local":
         ports["mlflow"] = config.mlflow.port
@@ -338,6 +341,7 @@ def _get_prefect_version() -> str | None:
     """Get installed Prefect version."""
     try:
         import prefect
+
         return getattr(prefect, "__version__", None)
     except ImportError:
         return None
@@ -347,6 +351,7 @@ def _get_mlflow_version() -> str | None:
     """Get installed MLflow version."""
     try:
         import mlflow
+
         return getattr(mlflow, "__version__", None)
     except ImportError:
         return None
@@ -368,6 +373,7 @@ def _get_redis_version() -> str | None:
     """Get Redis version if available."""
     try:
         import subprocess
+
         result = subprocess.run(
             ["redis-server", "--version"],
             capture_output=True,

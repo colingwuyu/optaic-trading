@@ -15,7 +15,9 @@ from libs.db.models.resource import Resource
 from libs.db.session import AsyncSessionLocal
 
 
-async def _seed_identity(tenant_id: uuid.UUID, actor_id: uuid.UUID, target_id: uuid.UUID) -> None:
+async def _seed_identity(
+    tenant_id: uuid.UUID, actor_id: uuid.UUID, target_id: uuid.UUID
+) -> None:
     async with AsyncSessionLocal() as session:
         await session.execute(insert(Tenant).values(id=tenant_id, name="Tenant"))
         await session.execute(
@@ -72,6 +74,7 @@ async def _create_activity_outbox(
     )
 
     async with AsyncSessionLocal() as session:
+
         async def domain_fn(_session):
             return None
 
@@ -129,7 +132,7 @@ async def test_outbox_processing_creates_notification_and_audit_log():
 async def test_outbox_skip_locked_prevents_double_processing():
     # SQLite workaround: mimic skip_locked by mocking empty return for second worker
     is_sqlite = engine.url.get_backend_name() == "sqlite"
-    
+
     tenant_id = uuid.uuid4()
     actor_id = uuid.uuid4()
     target_id = uuid.uuid4()
@@ -159,7 +162,7 @@ async def test_outbox_skip_locked_prevents_double_processing():
             if mock_fetch and is_sqlite:
                 # Simulate "skip locked" effectively returning nothing
                 return 0
-            
+
             return await process_outbox_batch(
                 session, handlers=handler_map, tenant_id=tenant_id
             )

@@ -33,7 +33,9 @@ class SystemEngine(Base):
 
     __tablename__ = "system_engines"
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)  # e.g., "prefect", "mlflow"
+    id: Mapped[str] = mapped_column(
+        String(64), primary_key=True
+    )  # e.g., "prefect", "mlflow"
     mode: Mapped[str] = mapped_column(
         String(32), nullable=False, default="disabled"
     )  # local|remote|disabled
@@ -41,8 +43,18 @@ class SystemEngine(Base):
     data_dir: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     db_uri: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     package_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    last_migrated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_backup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    health: Mapped[str | None] = mapped_column(String(32), nullable=True)  # e.g., "healthy", "degraded"
-    health_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    config_json: Mapped[str | None] = mapped_column(Text, nullable=True)  # freeform config
+    last_migrated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_backup_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    health: Mapped[str | None] = mapped_column(
+        String(32), nullable=True
+    )  # e.g., "healthy", "degraded"
+    health_checked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    config_json: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )  # freeform config

@@ -10,7 +10,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.deps import reset_session
-from apps.api.schemas import AttachmentFinalizeIn, AttachmentUploadInitIn, AttachmentUploadInitOut
+from apps.api.schemas import (
+    AttachmentFinalizeIn,
+    AttachmentUploadInitIn,
+    AttachmentUploadInitOut,
+)
 from libs.core.activity import ActivityEnvelope, tx_activity
 from libs.core.rbac.models import ActorContext, Permission
 from libs.core.storage import create_presigned_put, head_object
@@ -44,9 +48,7 @@ async def _get_channel(
     return row[0], row[1]
 
 
-async def _get_message(
-    db: AsyncSession, tenant_id: UUID, message_id: UUID
-) -> Message:
+async def _get_message(db: AsyncSession, tenant_id: UUID, message_id: UUID) -> Message:
     result = await db.scalars(
         select(Message).where(
             Message.id == message_id,
@@ -101,7 +103,9 @@ async def finalize_attachment(
     try:
         head = await head_object(payload.object_key)
     except Exception as exc:
-        raise HTTPException(status_code=404, detail="Attachment object not found") from exc
+        raise HTTPException(
+            status_code=404, detail="Attachment object not found"
+        ) from exc
 
     etag = str(head.get("etag") or "")
     checksum = payload.checksum or ""

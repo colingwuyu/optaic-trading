@@ -49,11 +49,15 @@ tags_metadata = [
     {"name": "System", "description": "System upgrades and runtime info."},
     # Quant Domain
     {"name": "Datasets", "description": "Dataset preview, status, and refresh."},
-    {"name": "Signals", "description": "Signal registration, validation, and promotion."},
+    {
+        "name": "Signals",
+        "description": "Signal registration, validation, and promotion.",
+    },
     {"name": "Operators", "description": "Expression operators and evaluation."},
     {"name": "Experiments", "description": "Expression experiments and macros."},
     {"name": "Pipelines", "description": "Pipeline definitions, instances, and runs."},
 ]
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -65,6 +69,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Run startup hooks (seed definitions, etc.)
     try:
         from libs.core.startup import run_startup_hooks
+
         await run_startup_hooks()
     except Exception as e:
         logger.warning("api.startup_hooks_failed", error=str(e))
@@ -72,11 +77,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
     logger.info("api.shutdown")
 
+
 app = FastAPI(
     title="Resource Activity Platform API",
     openapi_tags=tags_metadata,
     lifespan=lifespan,
 )
+
 
 class SPAStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
@@ -97,8 +104,13 @@ def _get_webui_dist() -> Path | None:
         return None
     return Path(optaic.__file__).resolve().parent / "webui_dist"
 
+
 settings = get_settings()
-origins = [origin.strip() for origin in settings.cors_allow_origins.split(",") if origin.strip()]
+origins = [
+    origin.strip()
+    for origin in settings.cors_allow_origins.split(",")
+    if origin.strip()
+]
 allow_origins = ["*"] if "*" in origins else origins
 app.add_middleware(
     CORSMiddleware,

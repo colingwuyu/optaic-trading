@@ -13,8 +13,10 @@ from libs.db.models.activity import Activity, Outbox
 
 T = TypeVar("T")
 
+
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
 
 class ActivityEnvelope(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -30,6 +32,7 @@ class ActivityEnvelope(BaseModel):
     delivery_channels: list[str] = Field(default_factory=list)
     correlation_id: UUID = Field(default_factory=uuid4)
     created_at: datetime = Field(default_factory=utcnow)
+
 
 async def _get_activity_by_idempotency(
     session: AsyncSession,
@@ -47,7 +50,10 @@ async def _get_activity_by_idempotency(
     result = await session.scalars(stmt)
     return result.first()
 
-async def record_activity(session: AsyncSession, envelope: ActivityEnvelope) -> Activity:
+
+async def record_activity(
+    session: AsyncSession, envelope: ActivityEnvelope
+) -> Activity:
     existing = await _get_activity_by_idempotency(
         session,
         envelope.tenant_id,
@@ -74,6 +80,7 @@ async def record_activity(session: AsyncSession, envelope: ActivityEnvelope) -> 
     await session.flush()
     return activity
 
+
 async def enqueue_outbox(
     session: AsyncSession, topic: str, key: str, payload: Dict[str, Any]
 ) -> Outbox:
@@ -96,6 +103,7 @@ async def enqueue_outbox(
     await session.flush()
     return outbox
 
+
 async def record_activity_with_outbox(
     session: AsyncSession,
     envelope: ActivityEnvelope,
@@ -117,12 +125,15 @@ async def record_activity_with_outbox(
     await enqueue_outbox(session, topic, str(activity.id), outbox_payload)
     return activity
 
+
 async def tx_activity(
     session: AsyncSession,
     envelope: ActivityEnvelope,
     fn: Callable[[AsyncSession], Awaitable[T]],
 ) -> Tuple[Optional[T], Activity]:
-    transaction = session.begin_nested() if session.in_transaction() else session.begin()
+    transaction = (
+        session.begin_nested() if session.in_transaction() else session.begin()
+    )
     async with transaction:
         existing = await _get_activity_by_idempotency(
             session,

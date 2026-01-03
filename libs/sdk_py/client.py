@@ -12,13 +12,16 @@ if TYPE_CHECKING:
     from .pipelines import PipelinesClient
     from .signals import SignalsClient
 
+
 def _to_str(value: Optional[str | UUID]) -> Optional[str]:
     if value is None:
         return None
     return str(value)
 
+
 def _drop_none(values: Dict[str, Any]) -> Dict[str, Any]:
     return {key: value for key, value in values.items() if value is not None}
+
 
 class AsyncPlatformClient:
     def __init__(
@@ -164,6 +167,7 @@ class HealthClient:
     async def get(self) -> Dict[str, Any]:
         return await self._client._request("GET", "/healthz")
 
+
 class TenantsClient:
     def __init__(self, client: AsyncPlatformClient) -> None:
         self._client = client
@@ -193,6 +197,7 @@ class TenantsClient:
         return await self._client._request(
             "GET", "/tenants", principal_id=principal_id, tenant_id=tenant_id
         )
+
 
 class PrincipalsClient:
     def __init__(self, client: AsyncPlatformClient) -> None:
@@ -238,6 +243,7 @@ class PrincipalsClient:
             principal_id=principal_id,
             tenant_id=tenant_id,
         )
+
 
 class ResourcesClient:
     def __init__(self, client: AsyncPlatformClient) -> None:
@@ -311,9 +317,7 @@ class ResourcesClient:
     ) -> Dict[str, Any]:
         if name is None and status is None and metadata is None:
             raise ValueError("At least one field must be provided for update")
-        payload = _drop_none(
-            {"name": name, "status": status, "metadata": metadata}
-        )
+        payload = _drop_none({"name": name, "status": status, "metadata": metadata})
         return await self._client._request(
             "PATCH",
             f"/resources/{resource_id}",
@@ -352,6 +356,7 @@ class ResourcesClient:
             principal_id=principal_id,
             tenant_id=tenant_id,
         )
+
 
 class RefsClient:
     def __init__(self, client: AsyncPlatformClient) -> None:
@@ -403,6 +408,7 @@ class RefsClient:
             principal_id=principal_id,
             tenant_id=tenant_id,
         )
+
 
 class MergeRequestsClient:
     def __init__(self, client: AsyncPlatformClient) -> None:
@@ -484,6 +490,7 @@ class MergeRequestsClient:
             tenant_id=tenant_id,
         )
 
+
 class PromotionsClient:
     def __init__(self, client: AsyncPlatformClient) -> None:
         self._client = client
@@ -561,6 +568,7 @@ class PromotionsClient:
             principal_id=principal_id,
             tenant_id=tenant_id,
         )
+
 
 class RbacClient:
     def __init__(self, client: AsyncPlatformClient) -> None:
@@ -646,6 +654,7 @@ class RbacClient:
             params=params,
         )
 
+
 class ActivitiesClient:
     def __init__(self, client: AsyncPlatformClient) -> None:
         self._client = client
@@ -673,6 +682,7 @@ class ActivitiesClient:
             tenant_id=tenant_id,
             params=params,
         )
+
 
 class ChatClient:
     def __init__(self, client: AsyncPlatformClient) -> None:

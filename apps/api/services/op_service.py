@@ -74,13 +74,15 @@ class OpService:
             # Get description from docstring
             description = (func.__doc__ or "").split("\n")[0].strip()
 
-            operators.append({
-                "name": name,
-                "category": op_category,
-                "code_ref": name,  # code_ref matches registry key
-                "arity": arity,
-                "description": description,
-            })
+            operators.append(
+                {
+                    "name": name,
+                    "category": op_category,
+                    "code_ref": name,  # code_ref matches registry key
+                    "arity": arity,
+                    "description": description,
+                }
+            )
         return sorted(operators, key=lambda x: (x["category"], x["name"]))
 
     async def list_operators_with_metadata(
@@ -219,7 +221,9 @@ class OpService:
             await session.commit()
 
         # Convert result to response
-        return self._result_to_response(result, expression, datasets_used, operators_used)
+        return self._result_to_response(
+            result, expression, datasets_used, operators_used
+        )
 
     async def list_macros(
         self,

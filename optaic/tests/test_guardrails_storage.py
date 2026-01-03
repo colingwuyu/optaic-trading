@@ -43,7 +43,8 @@ async def async_db():
 
     # Create tables
     async with engine.begin() as conn:
-        await conn.execute(text("""
+        await conn.execute(
+            text("""
             CREATE TABLE resource_contract_bundles (
                 bundle_id TEXT PRIMARY KEY,
                 resource_id TEXT NOT NULL,
@@ -53,8 +54,10 @@ async def async_db():
                 bundle_json TEXT NOT NULL,
                 is_active BOOLEAN NOT NULL DEFAULT 1
             )
-        """))
-        await conn.execute(text("""
+        """)
+        )
+        await conn.execute(
+            text("""
             CREATE TABLE validation_reports (
                 report_id TEXT PRIMARY KEY,
                 scope TEXT NOT NULL,
@@ -66,7 +69,8 @@ async def async_db():
                 correlation_id TEXT,
                 report_json TEXT NOT NULL
             )
-        """))
+        """)
+        )
 
     # Create session
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -177,9 +181,12 @@ async def test_replacing_bundle_deactivates_previous(async_db: AsyncSession) -> 
 
     # Verify there's only one active bundle
     from sqlalchemy import text
+
     result = await async_db.execute(
-        text("SELECT COUNT(*) FROM resource_contract_bundles WHERE resource_id = :rid AND is_active = 1"),
-        {"rid": resource_id}
+        text(
+            "SELECT COUNT(*) FROM resource_contract_bundles WHERE resource_id = :rid AND is_active = 1"
+        ),
+        {"rid": resource_id},
     )
     count = result.scalar()
     assert count == 1
@@ -210,11 +217,15 @@ async def test_insert_and_list_reports(async_db: AsyncSession) -> None:
     assert len(all_reports) == 3
 
     # Filter by scope
-    resource_reports = await ValidationReportStore.list_reports(async_db, scope="resource")
+    resource_reports = await ValidationReportStore.list_reports(
+        async_db, scope="resource"
+    )
     assert len(resource_reports) == 2
 
     # Filter by target_id
-    target_reports = await ValidationReportStore.list_reports(async_db, target_id=target_id)
+    target_reports = await ValidationReportStore.list_reports(
+        async_db, target_id=target_id
+    )
     assert len(target_reports) == 2
 
     # Filter by both
@@ -236,7 +247,9 @@ async def test_list_reports_respects_limit(async_db: AsyncSession) -> None:
     await async_db.commit()
 
     # List with limit
-    reports = await ValidationReportStore.list_reports(async_db, target_id=target_id, limit=3)
+    reports = await ValidationReportStore.list_reports(
+        async_db, target_id=target_id, limit=3
+    )
     assert len(reports) == 3
 
 

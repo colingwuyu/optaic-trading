@@ -46,9 +46,7 @@ class AgentRunner:
         api_base_url: Optional[str] = None,
         model: Optional[str] = None,
         batch_size: int = 50,
-        client_factory: Optional[
-            Callable[[UUID, UUID], AsyncPlatformClient]
-        ] = None,
+        client_factory: Optional[Callable[[UUID, UUID], AsyncPlatformClient]] = None,
     ) -> None:
         settings = get_settings()
         self.api_base_url = api_base_url or settings.agent_api_base_url
@@ -146,7 +144,10 @@ class AgentRunner:
             return False
 
         allowed_resource_types = policy.get("allowed_resource_types")
-        if allowed_resource_types and activity.resource_type not in allowed_resource_types:
+        if (
+            allowed_resource_types
+            and activity.resource_type not in allowed_resource_types
+        ):
             return False
 
         if activity.action != "message.posted":
@@ -178,7 +179,9 @@ class AgentRunner:
         has_mention = mention_trigger and _MENTION_TOKEN in message.body.lower()
         channel_enabled = bool(channel and channel.settings.get("agent_enabled"))
         allowed_channels = trigger_rules.get("channels")
-        if allowed_channels and str(channel_id) not in {str(c) for c in allowed_channels}:
+        if allowed_channels and str(channel_id) not in {
+            str(c) for c in allowed_channels
+        }:
             return False
         if not (has_mention or channel_enabled):
             return False

@@ -66,7 +66,9 @@ class MlflowConfig:
     tracking_uri: str = ""  # if set, use remote mode
     backend_store_uri: str = ""  # defaults to sqlite in DATA_DIR/engines/mlflow/backend
     artifacts_mode: Literal["direct", "proxied"] = "direct"
-    default_artifact_root: Path | None = None  # defaults to DATA_DIR/engines/mlflow/artifacts
+    default_artifact_root: Path | None = (
+        None  # defaults to DATA_DIR/engines/mlflow/artifacts
+    )
 
     @property
     def mode(self) -> Literal["disabled", "local", "remote"]:
@@ -150,7 +152,6 @@ class RuntimeConfig:
         return warnings
 
 
-
 def load_runtime_config(*, data_dir: Path | None = None) -> RuntimeConfig:
     config_path = _resolve_config_path()
     config_payload = _load_toml(config_path)
@@ -211,9 +212,7 @@ def load_runtime_config(*, data_dir: Path | None = None) -> RuntimeConfig:
         port=_coerce_int(mlflow_payload.get("port"), default=5000),
         tracking_uri=str(mlflow_payload.get("tracking_uri") or ""),
         backend_store_uri=str(mlflow_payload.get("backend_store_uri") or ""),
-        artifacts_mode=_normalize_artifacts_mode(
-            mlflow_payload.get("artifacts_mode")
-        ),
+        artifacts_mode=_normalize_artifacts_mode(mlflow_payload.get("artifacts_mode")),
         default_artifact_root=_coerce_path(
             mlflow_artifact_raw,
             resolved_data_dir / "engines" / "mlflow" / "artifacts",
@@ -226,10 +225,14 @@ def load_runtime_config(*, data_dir: Path | None = None) -> RuntimeConfig:
     if prefect.home_dir is None:
         prefect.home_dir = resolved_data_dir / "engines" / "prefect" / "home"
     if not mlflow.backend_store_uri:
-        backend_path = resolved_data_dir / "engines" / "mlflow" / "backend" / "mlflow.db"
+        backend_path = (
+            resolved_data_dir / "engines" / "mlflow" / "backend" / "mlflow.db"
+        )
         mlflow.backend_store_uri = _sqlite_uri_for(backend_path)
     if mlflow.default_artifact_root is None:
-        mlflow.default_artifact_root = resolved_data_dir / "engines" / "mlflow" / "artifacts"
+        mlflow.default_artifact_root = (
+            resolved_data_dir / "engines" / "mlflow" / "artifacts"
+        )
 
     prefect.api_url = _resolve_placeholders(prefect.api_url, resolved_data_dir)
     mlflow.tracking_uri = _resolve_placeholders(mlflow.tracking_uri, resolved_data_dir)

@@ -89,9 +89,7 @@ def test_check_upgrade_downgrade_blocked() -> None:
 
 def test_check_upgrade_downgrade_allowed() -> None:
     """Downgrade is allowed when explicitly permitted."""
-    allowed, reason = es.check_upgrade_allowed(
-        "2.0.0", "1.0.0", allow_downgrade=True
-    )
+    allowed, reason = es.check_upgrade_allowed("2.0.0", "1.0.0", allow_downgrade=True)
     assert allowed is True
     assert reason == "downgrade_allowed"
 
@@ -167,8 +165,14 @@ def test_log_engine_upgrade(tmp_path: Path) -> None:
 def test_get_engine_paths(tmp_path: Path) -> None:
     """Helper functions return correct paths."""
     assert es.get_prefect_home(tmp_path) == tmp_path / "engines" / "prefect" / "home"
-    assert es.get_mlflow_backend_dir(tmp_path) == tmp_path / "engines" / "mlflow" / "backend"
-    assert es.get_mlflow_artifacts_dir(tmp_path) == tmp_path / "engines" / "mlflow" / "artifacts"
+    assert (
+        es.get_mlflow_backend_dir(tmp_path)
+        == tmp_path / "engines" / "mlflow" / "backend"
+    )
+    assert (
+        es.get_mlflow_artifacts_dir(tmp_path)
+        == tmp_path / "engines" / "mlflow" / "artifacts"
+    )
 
 
 def test_update_prefect_state() -> None:

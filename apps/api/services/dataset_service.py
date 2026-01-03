@@ -90,8 +90,12 @@ class DatasetService:
             "type": resource.type,
             "status": resource.status,
             "freshness_status": instance.freshness_status,
-            "last_data_date": str(instance.last_data_date) if instance.last_data_date else None,
-            "last_refresh_at": instance.last_refresh_at.isoformat() if instance.last_refresh_at else None,
+            "last_data_date": str(instance.last_data_date)
+            if instance.last_data_date
+            else None,
+            "last_refresh_at": instance.last_refresh_at.isoformat()
+            if instance.last_refresh_at
+            else None,
             "row_count": instance.row_count,
             "created_at": resource.created_at.isoformat(),
         }
@@ -134,14 +138,20 @@ class DatasetService:
 
         # 2. Load component instances
         store_inst = await session.get(StoreInstance, instance.store_instance_id)
-        accessor_inst = await session.get(AccessorInstance, instance.accessor_instance_id)
+        accessor_inst = await session.get(
+            AccessorInstance, instance.accessor_instance_id
+        )
 
         if not store_inst or not accessor_inst:
             raise ValueError("Dataset component instances not found")
 
         # 3. Load definitions to get code_ref
-        store_def = await session.get(StoreDefinition, store_inst.definition_resource_id)
-        accessor_def = await session.get(AccessorDefinition, accessor_inst.definition_resource_id)
+        store_def = await session.get(
+            StoreDefinition, store_inst.definition_resource_id
+        )
+        accessor_def = await session.get(
+            AccessorDefinition, accessor_inst.definition_resource_id
+        )
 
         if not store_def or not accessor_def:
             raise ValueError("Dataset component definitions not found")
@@ -197,11 +207,15 @@ class DatasetService:
             raise ValueError(f"DatasetInstance {dataset_id} not found")
 
         # Load pipeline instance and definition
-        pipeline_inst = await session.get(PipelineInstance, instance.pipeline_instance_id)
+        pipeline_inst = await session.get(
+            PipelineInstance, instance.pipeline_instance_id
+        )
         if not pipeline_inst:
             raise ValueError("Pipeline instance not found")
 
-        pipeline_def = await session.get(PipelineDefinition, pipeline_inst.definition_resource_id)
+        pipeline_def = await session.get(
+            PipelineDefinition, pipeline_inst.definition_resource_id
+        )
         if not pipeline_def:
             raise ValueError("Pipeline definition not found")
 
@@ -383,7 +397,9 @@ class DatasetService:
                 "id": str(resource.id),
                 "name": resource.name,
                 "freshness_status": instance.freshness_status,
-                "last_data_date": str(instance.last_data_date) if instance.last_data_date else None,
+                "last_data_date": str(instance.last_data_date)
+                if instance.last_data_date
+                else None,
                 "row_count": instance.row_count,
             }
             for resource, instance in rows

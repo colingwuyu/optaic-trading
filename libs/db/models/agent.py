@@ -20,14 +20,14 @@ class AgentPolicy(Base):
         ForeignKey("principals.id"), primary_key=True
     )
     policy: Mapped[dict] = mapped_column(JSONType, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
 
-    __table_args__ = (
-        Index("ix_agent_policies_tenant", "tenant_id"),
-    )
+    __table_args__ = (Index("ix_agent_policies_tenant", "tenant_id"),)
 
 
 class AgentCursor(Base):
@@ -45,6 +45,4 @@ class AgentCursor(Base):
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
 
-    __table_args__ = (
-        Index("ix_agent_cursors_tenant", "tenant_id"),
-    )
+    __table_args__ = (Index("ix_agent_cursors_tenant", "tenant_id"),)

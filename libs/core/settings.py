@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _LOG_LEVELS = {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
 _RBAC_MODES = {"casbin"}
 
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="", case_sensitive=False)
 
@@ -103,6 +104,7 @@ class Settings(BaseSettings):
         if mode not in _RBAC_MODES:
             raise ValueError(f"Invalid RBAC_MODE '{value}'")
         return mode
+
 
 @lru_cache
 def get_settings() -> Settings:

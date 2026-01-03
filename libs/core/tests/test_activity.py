@@ -162,9 +162,7 @@ async def test_tx_activity_rolls_back_on_failure(db_session):
     assert activity_row is None
 
     outbox_row = (
-        await db_session.scalars(
-            select(Outbox).where(Outbox.tenant_id == tenant_id)
-        )
+        await db_session.scalars(select(Outbox).where(Outbox.tenant_id == tenant_id))
     ).first()
     assert outbox_row is None
 

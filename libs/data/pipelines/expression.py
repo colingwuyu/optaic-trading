@@ -82,7 +82,9 @@ class ExpressionPipeline(DataPipeline):
                     )
                     context[name] = data
                 except Exception as e:
-                    raise RuntimeError(f"Failed to load constituent '{name}': {e}") from e
+                    raise RuntimeError(
+                        f"Failed to load constituent '{name}': {e}"
+                    ) from e
 
         # Also accept pre-loaded context from kwargs
         for key, value in kwargs.items():

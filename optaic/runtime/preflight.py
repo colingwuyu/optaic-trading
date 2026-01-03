@@ -167,7 +167,9 @@ def _format_migration_error(engine: str, result: object) -> str:
         msg += f"\n  Backup available at: {backup}"
         msg += "\n  To restore, copy the backup back to the original location."
     msg += "\n  Options:"
-    msg += "\n    --allow-engine-downgrade  Allow running with older version (dangerous)"
+    msg += (
+        "\n    --allow-engine-downgrade  Allow running with older version (dangerous)"
+    )
     msg += f"\n    --reset-{engine.lower()}-db  Delete and recreate DB (loses data)"
     return msg
 

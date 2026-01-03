@@ -37,7 +37,8 @@ async def _has_open_merge_requests_in_db(
             MergeRequest.tenant_id == tenant_id,
             MergeRequest.target_resource_id == resource_id,
             MergeRequest.status.in_(_MR_OPEN_STATUSES),
-            (MergeRequest.source_ref == ref_name) | (MergeRequest.target_ref == ref_name),
+            (MergeRequest.source_ref == ref_name)
+            | (MergeRequest.target_ref == ref_name),
         )
     )
     return result.first() is not None

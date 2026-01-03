@@ -5,8 +5,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 from ..base import Base
 from ..types import JSONType
 
+
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
 
 class Activity(Base):
     __tablename__ = "activities"
@@ -17,12 +19,20 @@ class Activity(Base):
     resource_id: Mapped[UUID] = mapped_column(index=True)
     resource_type: Mapped[str] = mapped_column(String(100))
     action: Mapped[str] = mapped_column(String(100))
-    target_principal_id: Mapped[UUID | None] = mapped_column(ForeignKey("principals.id"), nullable=True)
-    visibility: Mapped[str] = mapped_column(String(50), default="resource") # private|resource|scope|tenant|system
+    target_principal_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("principals.id"), nullable=True
+    )
+    visibility: Mapped[str] = mapped_column(
+        String(50), default="resource"
+    )  # private|resource|scope|tenant|system
     payload: Mapped[dict] = mapped_column(JSONType, default=dict)
-    authz_decision: Mapped[str | None] = mapped_column(String(50), nullable=True) # allow|deny
+    authz_decision: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )  # allow|deny
     correlation_id: Mapped[UUID] = mapped_column(default=uuid4)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )
 
     __table_args__ = (
         UniqueConstraint(
@@ -47,6 +57,7 @@ class Activity(Base):
         ),
     )
 
+
 class Outbox(Base):
     __tablename__ = "outbox"
 
@@ -55,8 +66,12 @@ class Outbox(Base):
     topic: Mapped[str] = mapped_column(String(255))
     key: Mapped[str] = mapped_column(String(255))
     payload: Mapped[dict] = mapped_column(JSONType)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     __table_args__ = (
         # Index for processing unpublished items: query with WHERE published_at IS NULL ORDER BY created_at

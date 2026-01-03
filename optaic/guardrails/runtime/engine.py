@@ -27,7 +27,9 @@ class GuardrailsBlocked(Exception):
             issue_msg += f": {issues[0].message}"
             if len(issues) > 1:
                 issue_msg += "..."
-        super().__init__(f"Guardrails blocked action (Report ID: {report_id}). {issue_msg}")
+        super().__init__(
+            f"Guardrails blocked action (Report ID: {report_id}). {issue_msg}"
+        )
 
 
 class GuardrailsEngine:
@@ -90,7 +92,9 @@ class GuardrailsEngine:
                 issues=[],
                 contract_hashes=[],
                 created_by=str(context.actor_principal_id),
-                correlation_id=str(context.correlation_id) if context.correlation_id else None,
+                correlation_id=str(context.correlation_id)
+                if context.correlation_id
+                else None,
             )
             # We still persist this "empty" validation
             await self._persist_and_emit(db, report, context, resource_id)
@@ -117,14 +121,14 @@ class GuardrailsEngine:
         # Since we don't have per-issue contract info here easily without iterating,
         # let's assume we take the strongest hint from *all* contracts in the bundle
         # as a conservative approach, OR assume "warn" and let policy override.
-        
+
         # A simple strategy: check if ANY contract says "block", use block hint.
         bundle_hint = "warn"
         for contract in bundle.contracts:
             if contract.enforcement_hint == "block":
                 bundle_hint = "block"
                 break
-        
+
         subspace = context.subspace_kind or "custom"
         enforced_as = compute_effective_enforcement(
             subspace, context.action, bundle_hint
@@ -146,7 +150,9 @@ class GuardrailsEngine:
             issues=issues,
             contract_hashes=[c.contract_hash for c in bundle.contracts],
             created_by=str(context.actor_principal_id),
-            correlation_id=str(context.correlation_id) if context.correlation_id else None,
+            correlation_id=str(context.correlation_id)
+            if context.correlation_id
+            else None,
         )
 
         # 4 & 5. Persist and Emit

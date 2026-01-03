@@ -37,7 +37,9 @@ async def main() -> None:
         children = await client.resources.list_children(project["id"], limit=10)
         print("children_count:", len(children["items"]))
 
-        updated = await client.resources.update(project["id"], name="SDK Project Updated")
+        updated = await client.resources.update(
+            project["id"], name="SDK Project Updated"
+        )
         print("updated_name:", updated["name"])
 
         effective = await client.rbac.effective(project["id"])
