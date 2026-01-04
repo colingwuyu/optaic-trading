@@ -373,7 +373,7 @@ class FreshnessChecker:
         if dataset is None:
             return UpdateFrequency()
 
-        config = dataset.config_json or {}
+        config = getattr(dataset, "config_json", None) or {}
         freq_config = config.get("update_frequency", {})
 
         return UpdateFrequency(

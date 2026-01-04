@@ -4,8 +4,51 @@ This document defines how to write and run tests in the OptAIC project. **All te
 
 ## Testing Philosophy
 
-1. **Unit tests** - Fast, isolated, no I/O (use mocks for external calls)
-2. **Integration tests** - Use SQLite, test against local wheel install
+### CRITICAL: NO MOCKS POLICY
+
+**Mocks are NOT ALLOWED for internal application logic.** This is a non-negotiable requirement.
+
+| Rule | Rationale |
+|------|-----------|
+| **NO AsyncMock** | Hides real async behavior, concurrency bugs |
+| **NO MagicMock** | Creates false positives, doesn't test real code |
+| **NO patch()** | Bypasses actual implementations |
+| **NO mock databases** | Use real SQLite via `db_session` fixture |
+| **NO mock orchestrators** | Use `LocalOrchestrator` with test executors |
+| **NO mock services** | Instantiate real service classes |
+
+**Why?** Mocks are "cheating" - they let tests pass without verifying the actual implementation. If you mock everything, you're testing mock behavior, not your code.
+
+### What Tests MUST Do
+
+1. **Use real database sessions** - `db_session` fixture from root `conftest.py`
+2. **Create actual database records** - SQL inserts, not mock objects
+3. **Use real service classes** - Instantiate and call real methods
+4. **Use LocalOrchestrator** - With custom node executors for fast execution
+5. **Verify KEY CONCEPTS** - Business logic, not just field existence
+6. **Cover corner cases** - Edge conditions, failure modes, boundary values
+
+### Acceptable Exceptions (External Third-Party Services Only)
+
+Mocks are ONLY acceptable for true external third-party services that:
+- Are outside our control (vendor APIs, external SaaS)
+- Have rate limits or costs (payment processors, cloud APIs)
+- Are unavailable in test environments (production-only services)
+
+```python
+# ACCEPTABLE: Mocking external vendor API
+@patch("httpx.AsyncClient.get")
+async def test_external_vendor_call(mock_get):
+    mock_get.return_value = Mock(status_code=200, json=lambda: {"vendor": "data"})
+    # Test code that calls external vendor
+
+# NOT ACCEPTABLE: Mocking internal services, database, orchestrator
+```
+
+### Test Categories
+
+1. **Unit tests** - Test individual functions with real dependencies (SQLite, LocalOrchestrator)
+2. **Integration tests** - Test full flows through API endpoints with sandbox infrastructure
 3. **No Docker** - Tests must run on native Windows without containers
 
 ## Test Structure
@@ -146,28 +189,119 @@ def test_health_check(live_server):
     assert response.status_code == 200
 ```
 
-## Mocking External Services
+## Testing Without Mocks
 
-For tests that need external services, use mocks:
+### Using LocalOrchestrator for Pipeline Tests
+
+Instead of mocking the orchestrator, use `LocalOrchestrator` with custom node executors:
 
 ```python
-# Mock HTTP calls
-from unittest.mock import patch, AsyncMock
+import asyncio
+from libs.orchestration import LocalOrchestrator
 
-@patch("httpx.AsyncClient.get")
-async def test_external_api(mock_get):
-    mock_get.return_value = AsyncMock(
-        status_code=200,
-        json=lambda: {"data": "test"}
+def create_test_orchestrator():
+    """Create LocalOrchestrator with simple test node executor."""
+    async def simple_node_executor(node_id, node_type, code_ref, config):
+        await asyncio.sleep(0.01)  # Simulate work
+        return {"status": "success", "rows_processed": 100, "last_data_date": "2025-01-01"}
+
+    return LocalOrchestrator(max_workers=2, node_executor=simple_node_executor)
+
+# Failing executor for error tests
+def create_failing_orchestrator():
+    async def failing_executor(node_id, node_type, code_ref, config):
+        raise RuntimeError("Simulated pipeline failure")
+    return LocalOrchestrator(max_workers=1, node_executor=failing_executor)
+
+# Slow executor for timeout tests
+def create_slow_orchestrator(delay: float = 5.0):
+    async def slow_executor(node_id, node_type, code_ref, config):
+        await asyncio.sleep(delay)
+        return {"status": "success"}
+    return LocalOrchestrator(max_workers=1, node_executor=slow_executor)
+```
+
+### Creating Real Database Records
+
+Use helper functions to create actual database records:
+
+```python
+from datetime import datetime, timezone
+from uuid import uuid4
+from sqlalchemy import text
+
+def utcnow_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+async def create_tenant_and_principal(db_session):
+    """Create real tenant and principal for tests."""
+    tenant_id = uuid4()
+    principal_id = uuid4()
+
+    await db_session.execute(
+        text("""
+            INSERT INTO tenants (id, name, created_at)
+            VALUES (:id, :name, :created_at)
+        """),
+        {"id": str(tenant_id), "name": "Test Tenant", "created_at": utcnow_iso()},
     )
-    # Test code that calls external API
+    await db_session.execute(
+        text("""
+            INSERT INTO principals (id, tenant_id, type, email, created_at)
+            VALUES (:id, :tenant_id, :type, :email, :created_at)
+        """),
+        {
+            "id": str(principal_id),
+            "tenant_id": str(tenant_id),
+            "type": "user",
+            "email": "test@example.com",
+            "created_at": utcnow_iso(),
+        },
+    )
+    await db_session.flush()
+    return tenant_id, principal_id
+```
 
-# Mock Redis
-@patch("redis.asyncio.Redis.from_url")
-async def test_with_redis(mock_redis):
-    mock_client = AsyncMock()
-    mock_redis.return_value = mock_client
-    # Test code
+### Testing Service Classes with Real Dependencies
+
+```python
+@pytest.mark.asyncio
+async def test_pipeline_run_service_submits_run(db_session):
+    """Test PipelineRunService with real DB and orchestrator."""
+    # Setup real test data
+    tenant_id, principal_id = await create_tenant_and_principal(db_session)
+    dataset_id = await create_dataset_instance(db_session, tenant_id, principal_id)
+
+    # Create real service with real dependencies
+    orchestrator = create_test_orchestrator()
+    status_store = StatusStore(db_session)
+    service = PipelineRunService(orchestrator=orchestrator, status_store=status_store)
+
+    # Execute with real session
+    result = await service.submit_run(
+        session=db_session,
+        dataset_instance_id=dataset_id,
+        actor=ActorContext(id=principal_id, tenant_id=tenant_id),
+    )
+
+    # Verify real database state
+    assert result.run_id is not None
+    run = await db_session.get(PipelineRun, result.run_id)
+    assert run.status in ("queued", "running")
+```
+
+### Only Mock External Third-Party APIs
+
+```python
+# ONLY acceptable mock usage: External vendor APIs
+@patch("httpx.AsyncClient.get")
+async def test_external_data_vendor(mock_get):
+    """Mock only truly external services like Bloomberg, Reuters, etc."""
+    mock_get.return_value = Mock(
+        status_code=200,
+        json=lambda: {"vendor": "external_data"}
+    )
+    # Test code that calls external vendor API
 ```
 
 ## Test Data Helpers
@@ -279,6 +413,60 @@ def test_doctor_command():
     assert result.exit_code == 0
 ```
 
+## Test Quality Requirements
+
+### Tests MUST Verify Key Concepts
+
+Tests are not just for checking interfaces or field existence. They must verify:
+
+| Aspect | What to Test |
+|--------|--------------|
+| **Business Logic** | Does the algorithm produce correct results? |
+| **State Transitions** | Do status changes happen correctly? |
+| **Edge Cases** | Empty inputs, null values, boundary conditions |
+| **Error Handling** | Does failure produce correct error state? |
+| **Concurrency** | Do parallel operations behave correctly? |
+| **Data Integrity** | Are FK relationships maintained? |
+
+### Test Design Principles
+
+```python
+class TestAutoTrigger:
+    """Example of comprehensive test design."""
+
+    async def test_auto_trigger_enabled_triggers_downstream(self, db_session):
+        """Basic case: enabled auto-trigger fires."""
+        # Setup: upstream completes, downstream has auto_trigger=True
+        # Execute: mark upstream complete
+        # Verify: downstream run was created
+
+    async def test_auto_trigger_disabled_does_not_trigger(self, db_session):
+        """Negative case: disabled auto-trigger does not fire."""
+        # Setup: upstream completes, downstream has auto_trigger=False
+        # Execute: mark upstream complete
+        # Verify: NO downstream run created
+
+    async def test_auto_trigger_chain_propagates(self, db_session):
+        """Chain case: A -> B(auto) -> C(auto) all trigger."""
+        # Setup: A -> B -> C chain, B and C have auto_trigger=True
+        # Execute: complete A
+        # Verify: B triggered, then C triggered
+
+    async def test_auto_trigger_chain_stops_at_manual(self, db_session):
+        """Edge case: chain stops when auto_trigger=False."""
+        # Setup: A -> B(auto) -> C(manual)
+        # Execute: complete A
+        # Verify: B triggered, C NOT triggered
+
+    async def test_diamond_pattern_waits_for_all_upstreams(self, db_session):
+        """Complex case: diamond A -> (B,C) -> D waits for both."""
+        # Setup: A -> B, A -> C, B -> D, C -> D
+        # Execute: complete A, then B
+        # Verify: D not triggered yet (waiting for C)
+        # Execute: complete C
+        # Verify: D now triggered
+```
+
 ## Avoiding Common Mistakes
 
 | Mistake | Correct Approach |
@@ -287,8 +475,82 @@ def test_doctor_command():
 | Importing all models in conftest | Import only needed models to avoid NULLS FIRST issues |
 | Sharing test data between tests | Use function-scoped fixtures |
 | Testing against production DB | Use temp file or in-memory SQLite |
+| **Using AsyncMock/MagicMock** | **Use real classes with real DB** |
+| **Mocking orchestrator** | **Use LocalOrchestrator with test executor** |
+| **Mocking services** | **Instantiate real service classes** |
+| **Testing only happy path** | **Include error cases, edge cases, boundaries** |
+| **Testing interface only** | **Verify business logic and state changes** |
 | Mocking database operations | Use real SQLite operations |
-| Running external services | Mock external calls, use TestClient for API |
+| Running external services | Mock ONLY external vendor APIs, use TestClient for internal API |
+
+## Real Infrastructure Integration Tests
+
+For testing against REAL infrastructure servers (Prefect, MLflow, Centrifugo), use the integration test framework in `tests/integration/`.
+
+### Two Testing Modes
+
+| Mode | Flag | Use Case |
+|------|------|----------|
+| Ephemeral | `--run-integration` | CI/CD, fresh servers per session |
+| Sandbox | `--use-sandbox` | Development, persistent servers |
+
+```bash
+# Ephemeral mode (starts/stops servers per test session)
+uv run pytest tests/integration/ --run-integration
+
+# Sandbox mode (uses persistent sandbox)
+uv run pytest tests/integration/ --use-sandbox
+
+# Manage sandbox manually
+python tests/integration/sandbox.py start
+python tests/integration/sandbox.py status
+python tests/integration/sandbox.py stop
+```
+
+### Test Sandbox Features
+
+The sandbox (`tests/integration/sandbox.py`) provides:
+- **Persistent infrastructure** - Survives between pytest runs
+- **Upgrade checking** - Detects when migrations needed
+- **Full stack** - API, Worker, Centrifugo, Prefect, MLflow
+- **State persistence** - In `~/.optaic-test-sandbox/`
+
+### Writing Integration Tests
+
+```python
+import pytest
+
+pytestmark = pytest.mark.integration
+
+class TestPrefectIntegration:
+    def test_deployment_returns_real_id(self, prefect_server: str) -> None:
+        """Test creating deployment returns real UUID."""
+        from prefect.client.orchestration import get_client
+        import asyncio
+
+        async def verify():
+            async with get_client() as client:
+                deployment_id = await client.create_deployment(...)
+                assert deployment_id is not None  # Real UUID!
+
+        asyncio.run(verify())
+```
+
+### Available Fixtures
+
+| Fixture | Mode | Description |
+|---------|------|-------------|
+| `prefect_server` | Ephemeral | Real Prefect API URL |
+| `mlflow_server` | Ephemeral | Real MLflow tracking URI |
+| `centrifugo_server` | Ephemeral | Real Centrifugo connection info |
+| `sandbox` | Sandbox | Full sandbox instance |
+| `unified_*` | Both | Auto-selects based on mode |
+
+### What Integration Tests Verify
+
+- **Prefect**: Real `deployment_id`, `flow_run_id`, `task_run_id`
+- **MLflow**: Real `experiment_id`, `run_id`, metrics persistence
+- **Centrifugo**: Real WebSocket publishing, channel patterns
 
 ## CI/CD Testing
 
@@ -297,11 +559,19 @@ Tests run in CI without Docker:
 ```yaml
 # .github/workflows/test.yml (example)
 jobs:
-  test:
+  unit-tests:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
       - run: uv sync --group dev
-      - run: uv run pytest --tb=short
+      - run: uv run pytest --ignore=tests/integration --tb=short
+
+  integration-tests:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --group dev
+      - run: uv run pytest tests/integration/ --run-integration
 ```

@@ -54,7 +54,7 @@ async def test_realtime_token_denies_unauthorized_channel():
             },
         )
         assert channel_response.status_code == 201
-        channel_id = channel_response.json()["resource_id"]
+        channel_id = channel_response.json()["id"]
 
         token_response = await client.post(
             "/realtime/token",
@@ -95,7 +95,7 @@ async def test_realtime_token_allows_owner_channels():
             },
         )
         assert channel_response.status_code == 201
-        channel_id = channel_response.json()["resource_id"]
+        channel_id = channel_response.json()["id"]
 
         channels = [
             f"t:{tenant_id}:u:{owner_id}",
@@ -162,7 +162,7 @@ async def test_realtime_bootstrap_filters_channels_and_subscriptions():
             },
         )
         assert channel_response.status_code == 201
-        channel_id = channel_response.json()["resource_id"]
+        channel_id = channel_response.json()["id"]
 
         subscribe_response = await client.post(
             "/subscriptions",

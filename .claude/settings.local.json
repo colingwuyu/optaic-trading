@@ -15,7 +15,12 @@
       "Bash(uv pip install:*)",
       "Bash(dir \"C:\\\\Users\\\\colin\\\\source\\\\repos\\\\optaic-v0\\\\dev_tools\\\\src\\\\function\\\\library\")",
       "Bash(dir:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(uv pip list:*)",
+      "Bash(uv run optaic --help:*)",
+      "Bash(netstat:*)",
+      "Bash(uv pip index:*)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }

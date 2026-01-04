@@ -20,6 +20,7 @@ from apps.api.routers.merge_requests import router as merge_requests_router
 from apps.api.routers.ops import router as ops_router
 from apps.api.routers.pipelines import router as pipelines_router
 from apps.api.routers.principals import router as principals_router
+from apps.api.routers.runs import router as runs_router
 from apps.api.routers.promotions import router as promotions_router
 from apps.api.routers.realtime import router as realtime_router
 from apps.api.routers.rbac import router as rbac_router
@@ -56,6 +57,7 @@ tags_metadata = [
     {"name": "Operators", "description": "Expression operators and evaluation."},
     {"name": "Experiments", "description": "Expression experiments and macros."},
     {"name": "Pipelines", "description": "Pipeline definitions, instances, and runs."},
+    {"name": "Runs", "description": "PipelineRun and ExperimentRun execution."},
 ]
 
 
@@ -141,6 +143,7 @@ app.include_router(signals_router)
 app.include_router(ops_router)
 app.include_router(experiments_router)
 app.include_router(pipelines_router)
+app.include_router(runs_router)
 
 webui_dist = _get_webui_dist()
 if webui_dist and webui_dist.is_dir():

@@ -57,19 +57,19 @@ Migrations run automatically via Alembic on startup.
 ### 6. Testing Patterns
 
 **Unit tests (no external dependencies):**
-'''bash
+```bash
 uv run pytest libs/db/tests/        # SQLite in-memory
 uv run pytest libs/core/tests/      # Pure Python
-'''
+```
 
 **Test fixtures use SQLite (no Docker) with proper configuration:**
-'''python
+```python
 # libs/db/tests/conftest.py pattern
 @pytest_asyncio.fixture(scope='session')
 async def test_engine():
     # Use NullPool to avoid file locks
     engine = create_async_engine(url, poolclass=NullPool)
-    
+
     # Important: Set pragmas for performance and loose audit coupling
     @event.listens_for(Pool, 'connect')
     def _set_sqlite_pragmas(dbapi_connection, _):
@@ -77,9 +77,35 @@ async def test_engine():
         cursor.execute('PRAGMA journal_mode=WAL')
         cursor.execute('PRAGMA foreign_keys=OFF') # Vital for audit logging resilience
         cursor.close()
-        
+
     yield engine
-'''
+```
+
+### 6a. Integration Testing (Real Infrastructure)
+
+**All tests use sandbox infrastructure by default:**
+```bash
+# Run all tests (sandbox starts automatically)
+uv run pytest
+
+# Run unit tests only
+uv run pytest libs/ apps/ optaic/
+
+# Run integration tests only
+uv run pytest tests/integration/
+
+# Custom sandbox location
+OPTAIC_TEST_SANDBOX_DIR=/custom/path uv run pytest
+```
+
+**Infrastructure started per session:**
+| Service | Port | What Tests Verify |
+|---------|------|-------------------|
+| Prefect | 14200 | Real `deployment_id`, `flow_run_id`, `task_run_id` |
+| MLflow | 14500 | Real `experiment_id`, `run_id`, metrics persistence |
+| Centrifugo | 14000 | Real WebSocket publishing, channel patterns |
+
+See `conftest.py` (root) and `.agent/rules/integration_testing.md` for details.
 
 ### 7. Self-Upgrade Pattern
 

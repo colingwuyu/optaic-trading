@@ -15,7 +15,9 @@ class Activity(Base):
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
-    actor_principal_id: Mapped[UUID] = mapped_column(ForeignKey("principals.id"))
+    actor_principal_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("principals.id"), nullable=True
+    )  # NULL for system-generated activities
     resource_id: Mapped[UUID] = mapped_column(index=True)
     resource_type: Mapped[str] = mapped_column(String(100))
     action: Mapped[str] = mapped_column(String(100))

@@ -289,7 +289,7 @@ async def build_graph(
         flow_def = graph.to_dict()
         await orchestrator.submit_run(run_id, flow_def, config, tags)
     """
-    from libs.db.models import Resource
+    from libs.db.models.resource import Resource
     from libs.db.models.quant import DatasetInstance
 
     from .status_store import StatusStore

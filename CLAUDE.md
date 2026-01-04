@@ -38,6 +38,34 @@ All tests must not only pass, but also execute without any warnings (e.g., depre
 - **Warning Resolution:** If any warnings occur during the test run or compilation, the agent is responsible for resolving them as if they were errors.
 - **Clean Output:** The final report to the user must confirm that the test output is entirely clean of warnings and errors.
 
+### NO MOCKS Policy (CRITICAL)
+Mocks are NOT allowed for internal application logic. Use real database sessions and ORM models.
+
+| Instead of... | Use... |
+|---------------|--------|
+| `AsyncMock(spec=Service)` | Real service with `db_session` fixture |
+| `MagicMock(spec=AsyncSession)` | Real `db_session` from conftest.py |
+| Raw SQL for test data | ORM model instances |
+
+**Only exception:** External third-party APIs (Bloomberg, vendor APIs).
+
+### Test Anti-Patterns (FORBIDDEN)
+
+| Anti-Pattern | Why It's Wrong | Correct Approach |
+|--------------|----------------|------------------|
+| `def test_x(): pass` | Fake test, inflates count | Remove or implement real test |
+| `try: ... except: pass` | Hides failures | Let exceptions propagate |
+| `except ImportError: pass` | Silent skip of broken deps | **Fix pyproject.toml** |
+
+### Dependency Policy
+
+**All imports must be in pyproject.toml.** If a test imports a package:
+- The package MUST be listed in `[project.dependencies]` or `[dependency-groups.dev]`
+- Import errors should FAIL tests loudly - they indicate broken project setup
+- `pytest.importorskip()` is NOT an excuse for missing dependencies
+
+Tests are meant to **discover errors**, not just make test counts go up.
+
 ## Project Overview
 
 OptAIC is a resource management and activity tracking platform with an embedded web UI and Windows-friendly runtime. It provides a unified API for resources, chat, real-time updates, and audit trails. The system ships a single `optaic` CLI that boots API + worker + agent + Centrifugo and serves the React UI.

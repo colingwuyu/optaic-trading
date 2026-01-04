@@ -413,6 +413,18 @@ class DatasetInstance(Base):
         String(255), nullable=True
     )  # Prefect Deployment ID for scheduled runs
 
+    # Lineage: cached upstream dependencies (computed at creation time)
+    # This enables quick dependency checks without querying dataset_lineage table
+    upstream_resource_ids: Mapped[Optional[list[str]]] = mapped_column(
+        UUIDArrayType, nullable=True, default=list
+    )  # List of upstream DatasetInstance IDs
+
+    # Upstream status tracking (for pub/sub pattern)
+    # Key: upstream_resource_id (str), Value: "ready" | "stale" | "running" | "error"
+    upstream_status: Mapped[Optional[dict]] = mapped_column(
+        JSONType, nullable=True, default=dict
+    )  # Tracks status of each upstream dependency
+
     # Freshness tracking
     freshness_status: Mapped[str] = mapped_column(
         String(32), default="unknown"
@@ -422,6 +434,9 @@ class DatasetInstance(Base):
         DateTime(timezone=True), nullable=True
     )
     row_count: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+
+    # Execution configuration
+    auto_trigger: Mapped[bool] = mapped_column(default=False, server_default=text("0"))
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow

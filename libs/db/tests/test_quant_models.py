@@ -16,8 +16,13 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+def utcnow() -> str:
+    """Return current UTC time as ISO format string.
+
+    Uses ISO format to avoid Python 3.12+ deprecation warning about
+    the default sqlite3 datetime adapter.
+    """
+    return datetime.now(timezone.utc).isoformat()
 
 
 def str_uuid() -> str:

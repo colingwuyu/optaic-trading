@@ -83,37 +83,64 @@ async def daily_refresh(dataset_id: UUID, date: str):
 
 See [references/prefect-patterns.md](references/prefect-patterns.md).
 
-## Lineage and Freshness Checking
+## Lineage DAG at Creation Time
 
-Before executing a pipeline, check upstream freshness:
+**CRITICAL**: Lineage DAG is built when Instances are CREATED, NOT at execution time.
 
 ```python
-from libs.orchestration import (
-    LineageResolver,
-    FreshnessChecker,
-    UpstreamNotReadyError,
-)
+from libs.orchestration import LineageResolver
 
-async def run_with_lineage_check(session, dataset_id, force=False):
+# At DatasetInstance creation:
+async def create_dataset_instance(session, actor, payload):
     resolver = LineageResolver()
-    checker = FreshnessChecker(status_store)
 
-    # Check upstream freshness
-    report = await resolver.check_upstream_freshness(
-        session, dataset_id, checker
+    # 1. Build lineage DAG from pipeline config
+    dag = await resolver.build_dag_for_instance(session, instance.id, actor.tenant_id)
+
+    # 2. Cache upstream IDs for fast execution checks
+    if dag.has_dependencies:
+        instance.upstream_resource_ids = dag.upstream_ids
+        instance.upstream_status = {str(uid): "unknown" for uid in dag.upstream_ids}
+
+        # 3. Create DatasetLineage + Subscription records
+        await resolver.create_lineage_and_subscriptions(session, dag)
+```
+
+## Pub/Sub Observer Pattern
+
+Downstream datasets are notified when upstreams complete:
+
+```python
+from libs.orchestration import LineageObserver, CentrifugoNotifier
+
+async def on_run_completed(session, run):
+    observer = LineageObserver()
+
+    # Notify downstreams, get those now fully ready
+    ready_ids = await observer.on_upstream_completed(
+        session,
+        upstream_id=run.dataset_instance_id,
+        run_id=run.resource_id,
     )
 
-    if not report.all_ready and not force:
-        raise UpstreamNotReadyError(
-            f"{len(report.blocking_resources)} upstream(s) not ready",
-            blocking_resources=report.blocking_resources,
-        )
+    # Publish real-time notifications
+    notifier = CentrifugoNotifier()
+    for downstream_id in ready_ids:
+        await notifier.notify_upstream_ready(downstream_id, upstream_id, True)
+```
 
-    # Execute pipeline
-    result = await execute_pipeline(dataset_id)
+## Fast Execution Check
 
-    # On success, propagate staleness to downstream
-    await resolver.propagate_staleness(session, dataset_id)
+Use cached status for execution checks (no lineage query):
+
+```python
+from libs.orchestration import LineageResolver
+
+resolver = LineageResolver()
+all_ready = await resolver.check_all_upstreams_ready(session, instance_id)
+
+if not all_ready and not force:
+    raise UpstreamNotReadyError(...)
 ```
 
 ## UpdateFrequency Configuration

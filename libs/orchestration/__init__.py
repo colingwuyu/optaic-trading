@@ -13,22 +13,32 @@ This package provides:
 
 from __future__ import annotations
 
-from .adapter import OrchestratorAdapter, RunStatus, SubmitResult
+from .adapter import DeploymentResult, OrchestratorAdapter, RunStatus, SubmitResult
 from .dag import DependencyGraph, build_graph
 from .freshness import DatasetStatus, FreshnessChecker, FreshnessReport, UpdateFrequency
-from .lineage import LineageFreshnessReport, LineageResolver, UpstreamNotReadyError
+from .lineage import (
+    LineageDAG,
+    LineageFreshnessReport,
+    LineageResolver,
+    UpstreamNotReadyError,
+)
+from .observers import CentrifugoNotifier, LineageObserver
 from .local import LocalOrchestrator
 from .prefect_adapter import PrefectOrchestrator
 from .run_service import RunExecutionService
 from .status_store import DatasetStatusRecord, StatusStore
 
 __all__ = [
+    "CentrifugoNotifier",
     "DatasetStatus",
     "DatasetStatusRecord",
     "DependencyGraph",
+    "DeploymentResult",
     "FreshnessChecker",
     "FreshnessReport",
+    "LineageDAG",
     "LineageFreshnessReport",
+    "LineageObserver",
     "LineageResolver",
     "LocalOrchestrator",
     "OrchestratorAdapter",

@@ -206,12 +206,17 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["libs", "apps", "optaic"]
+testpaths = ["libs", "apps", "optaic", "tests"]
 filterwarnings = [
-    "ignore:The default datetime adapter is deprecated:DeprecationWarning:aiosqlite",
-    # mlflow uses deprecated Pydantic patterns - ignore their deprecation warnings
+    # MLflow has known Pydantic/protobuf deprecation issues (tracked in mlflow/mlflow#11203, #12654, #13018)
+    # These are third-party issues that cannot be fixed by updating package versions.
+    # MLflow team will fix when they drop Pydantic 1.x support.
     "ignore:Using `@model_validator` with mode='after' on a classmethod is deprecated:DeprecationWarning:mlflow",
     "ignore:Support for class-based `config` is deprecated:DeprecationWarning:mlflow",
+    "ignore:label\\(\\) is deprecated:DeprecationWarning:mlflow",
+]
+markers = [
+    "integration: marks tests as integration tests (tests against real infrastructure)",
 ]
 
 [dependency-groups]

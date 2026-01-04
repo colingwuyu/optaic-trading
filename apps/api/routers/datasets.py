@@ -23,7 +23,14 @@ from apps.api.schemas import (
     DatasetPreviewOut,
     DatasetPreviewRequest,
     DatasetRefreshOut,
+    DatasetScheduleOut,
     DatasetStatusOut,
+    LineageDAGOut,
+    LineageEdgeOut,
+    LineageFreshnessOut,
+    LineageNodeOut,
+    ScheduleConfigIn,
+    ScheduleConfigOut,
 )
 from apps.api.services import DatasetService
 from libs.core.rbac.models import ActorContext, Permission
@@ -283,4 +290,250 @@ async def refresh_dataset(
         name=result["name"],
         status=result["status"],
         message=result["message"],
+    )
+
+
+@router.get("/{dataset_id}/lineage", response_model=LineageDAGOut)
+async def get_dataset_lineage(
+    dataset_id: UUID,
+    direction: str = Query(
+        default="both",
+        pattern="^(upstream|downstream|both)$",
+        description="Direction to traverse: upstream, downstream, or both",
+    ),
+    depth: int = Query(
+        default=3,
+        ge=1,
+        le=10,
+        description="Maximum traversal depth",
+    ),
+    actor: ActorContext = Depends(get_actor),
+    db: AsyncSession = Depends(get_db),
+) -> LineageDAGOut:
+    """Get lineage DAG for visualization.
+
+    Returns a graph structure suitable for visualization libraries
+    like D3.js, Dagre, or Cytoscape.
+
+    The response includes:
+    - nodes: All resources in the lineage graph
+    - edges: Dependencies between resources
+    - execution_order: Topologically sorted batches for parallel execution
+    - freshness: Current freshness status of upstreams
+
+    Args:
+        dataset_id: Dataset resource ID
+        direction: Traversal direction (upstream, downstream, both)
+        depth: Maximum traversal depth (1-10)
+        actor: Actor context
+        db: Database session
+
+    Returns:
+        LineageDAGOut with graph data for visualization
+    """
+    resource = await get_resource_or_404(db, actor.tenant_id, dataset_id)
+    await authorize_or_403(db, actor, Permission.RESOURCE_READ, resource.id)
+
+    service = DatasetService()
+    result = await service.get_lineage_dag(
+        session=db,
+        actor=actor,
+        dataset_id=dataset_id,
+        direction=direction,
+        depth=depth,
+    )
+
+    # Convert to response model
+    nodes = [
+        LineageNodeOut(
+            id=n["id"],
+            name=n["name"],
+            type=n["type"],
+            status=n.get("status"),
+            direction=n["direction"],
+        )
+        for n in result["nodes"]
+    ]
+
+    edges = [
+        LineageEdgeOut(
+            source=e["source"],
+            target=e["target"],
+            kind=e.get("kind", "data_dependency"),
+        )
+        for e in result["edges"]
+    ]
+
+    freshness = None
+    if result.get("freshness"):
+        freshness = LineageFreshnessOut(
+            all_ready=result["freshness"]["all_ready"],
+            blockers=result["freshness"]["blockers"],
+        )
+
+    return LineageDAGOut(
+        nodes=nodes,
+        edges=edges,
+        center_id=result["center_id"],
+        execution_order=result["execution_order"],
+        freshness=freshness,
+    )
+
+
+# --- Schedule Management Endpoints (Phase 2.8.5) ---
+
+
+@router.get("/{dataset_id}/schedule", response_model=DatasetScheduleOut)
+async def get_dataset_schedule(
+    dataset_id: UUID,
+    actor: ActorContext = Depends(get_actor),
+    db: AsyncSession = Depends(get_db),
+) -> DatasetScheduleOut:
+    """Get schedule configuration for a dataset.
+
+    Returns the current schedule settings including:
+    - cron expression or interval
+    - active status
+    - deployment ID and orchestrator info
+
+    Args:
+        dataset_id: Dataset resource ID
+        actor: Actor context
+        db: Database session
+
+    Returns:
+        DatasetScheduleOut with schedule configuration
+    """
+    resource = await get_resource_or_404(db, actor.tenant_id, dataset_id)
+    await authorize_or_403(db, actor, Permission.RESOURCE_READ, resource.id)
+
+    service = DatasetService()
+    try:
+        result = await service.get_schedule(
+            session=db,
+            actor=actor,
+            dataset_id=dataset_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    schedule = None
+    if result.get("schedule"):
+        schedule = ScheduleConfigOut(
+            cron=result["schedule"].get("cron"),
+            interval_seconds=result["schedule"].get("interval_seconds"),
+            active=result["schedule"].get("active", True),
+            last_scheduled_at=result["schedule"].get("last_scheduled_at"),
+            next_scheduled_at=result["schedule"].get("next_scheduled_at"),
+        )
+
+    return DatasetScheduleOut(
+        id=UUID(result["id"]),
+        name=result["name"],
+        schedule=schedule,
+        deployment_id=result.get("deployment_id"),
+        orchestrator_kind=result.get("orchestrator_kind"),
+    )
+
+
+@router.put("/{dataset_id}/schedule", response_model=DatasetScheduleOut)
+async def update_dataset_schedule(
+    dataset_id: UUID,
+    payload: ScheduleConfigIn = Body(...),
+    actor: ActorContext = Depends(get_actor),
+    db: AsyncSession = Depends(get_db),
+) -> DatasetScheduleOut:
+    """Update schedule configuration for a dataset.
+
+    Supports:
+    - cron: Standard cron expression (e.g., "0 6 * * *" for 6am daily)
+    - interval_seconds: Fixed interval in seconds (minimum 60)
+    - active: Whether schedule is enabled
+
+    Only one of cron or interval_seconds should be provided.
+
+    The schedule is synced to the orchestrator (Prefect deployment)
+    if available.
+
+    Args:
+        dataset_id: Dataset resource ID
+        payload: Schedule configuration
+        actor: Actor context
+        db: Database session
+
+    Returns:
+        DatasetScheduleOut with updated schedule
+    """
+    resource = await get_resource_or_404(db, actor.tenant_id, dataset_id)
+    await authorize_or_403(db, actor, Permission.RESOURCE_UPDATE, resource.id)
+
+    service = DatasetService()
+    try:
+        result = await service.update_schedule(
+            session=db,
+            actor=actor,
+            dataset_id=dataset_id,
+            schedule={
+                "cron": payload.cron,
+                "interval_seconds": payload.interval_seconds,
+                "active": payload.active,
+            },
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    schedule = None
+    if result.get("schedule"):
+        schedule = ScheduleConfigOut(
+            cron=result["schedule"].get("cron"),
+            interval_seconds=result["schedule"].get("interval_seconds"),
+            active=result["schedule"].get("active", True),
+        )
+
+    return DatasetScheduleOut(
+        id=UUID(result["id"]),
+        name=result["name"],
+        schedule=schedule,
+        deployment_id=result.get("deployment_id"),
+        orchestrator_kind=result.get("orchestrator_kind"),
+    )
+
+
+@router.delete("/{dataset_id}/schedule", response_model=DatasetScheduleOut)
+async def delete_dataset_schedule(
+    dataset_id: UUID,
+    actor: ActorContext = Depends(get_actor),
+    db: AsyncSession = Depends(get_db),
+) -> DatasetScheduleOut:
+    """Remove schedule from a dataset.
+
+    Disables the schedule but keeps the deployment for manual triggers.
+
+    Args:
+        dataset_id: Dataset resource ID
+        actor: Actor context
+        db: Database session
+
+    Returns:
+        DatasetScheduleOut with schedule set to None
+    """
+    resource = await get_resource_or_404(db, actor.tenant_id, dataset_id)
+    await authorize_or_403(db, actor, Permission.RESOURCE_UPDATE, resource.id)
+
+    service = DatasetService()
+    try:
+        result = await service.delete_schedule(
+            session=db,
+            actor=actor,
+            dataset_id=dataset_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    return DatasetScheduleOut(
+        id=UUID(result["id"]),
+        name=result["name"],
+        schedule=None,
+        deployment_id=result.get("deployment_id"),
+        orchestrator_kind=result.get("orchestrator_kind"),
     )

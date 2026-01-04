@@ -40,36 +40,80 @@ async def create_dataset_instance(session, actor, payload):
     instance.prefect_deployment_id = deployment.id
 ```
 
-## 3. Lineage is Flow-to-Flow
+## 3. Lineage DAG at Flow Creation (NOT Execution)
 
-Dependencies track flow statuses, NOT instance relationships:
+**CRITICAL**: Lineage DAG is built when Instances are CREATED, NOT at execution time.
 
-```
-DatasetInstance.refresh_flow
-        ↓ depends on
-UpstreamDataset.refresh_flow status = READY
-```
-
-## 4. Lineage Check Before Execution
+This is the correct architecture:
+- Build DAG at creation time
+- Create subscriptions for pub/sub pattern
+- Cache upstream IDs for fast execution checks
 
 ```python
-from libs.orchestration import (
-    LineageResolver, FreshnessChecker, UpstreamNotReadyError
-)
+from libs.orchestration import LineageResolver
 
-async def trigger_run(session, resource_id, force=False):
+# At DatasetInstance creation:
+async def create_dataset_instance(session, actor, payload):
+    # 1. Create Resource + extension
+    instance = ...
+
+    # 2. Build lineage DAG from pipeline config (CREATION TIME)
     resolver = LineageResolver()
-    checker = FreshnessChecker(status_store)
+    dag = await resolver.build_dag_for_instance(session, instance.id, actor.tenant_id)
 
-    report = await resolver.check_upstream_freshness(
-        session, resource_id, checker
-    )
+    # 3. Cache upstream IDs for fast execution checks
+    if dag.has_dependencies:
+        instance.upstream_resource_ids = dag.upstream_ids
+        instance.upstream_status = {str(uid): "unknown" for uid in dag.upstream_ids}
 
-    if not report.all_ready and not force:
-        raise UpstreamNotReadyError(...)
+        # 4. Create DatasetLineage + Subscription records (pub/sub)
+        await resolver.create_lineage_and_subscriptions(session, dag)
 ```
 
-## 5. Status Aggregation
+## 4. Pub/Sub Observer Pattern
+
+Downstreams subscribe to upstream completion events:
+
+```python
+from libs.orchestration import LineageObserver, CentrifugoNotifier
+
+# In PipelineRunService._on_run_completed:
+async def _on_run_completed(session, run):
+    # 1. Notify downstream dependents via observer
+    observer = LineageObserver()
+    ready_ids = await observer.on_upstream_completed(
+        session,
+        upstream_id=run.dataset_instance_id,
+        run_id=run.resource_id,
+    )
+
+    # 2. Publish real-time notifications to Centrifugo
+    notifier = CentrifugoNotifier()
+    for downstream_id in ready_ids:
+        await notifier.notify_upstream_ready(downstream_id, upstream_id, all_ready=True)
+```
+
+Observer methods:
+- `on_upstream_completed()` - Marks upstream as "ready" in downstreams
+- `on_upstream_failed()` - Marks upstream as "error" in downstreams
+- `on_upstream_started()` - Marks upstream as "running" in downstreams
+- `get_ready_to_run()` - Gets all datasets with all upstreams ready
+
+## 5. Execution Check (From Cached Status)
+
+Fast execution check uses cached upstream_status, NOT full lineage query:
+
+```python
+from libs.orchestration import LineageResolver
+
+resolver = LineageResolver()
+all_ready = await resolver.check_all_upstreams_ready(session, instance_id)
+
+if not all_ready and not force:
+    raise UpstreamNotReadyError(...)
+```
+
+## 6. Status Aggregation
 
 Instance status aggregates from its Flow(s):
 
@@ -85,7 +129,7 @@ instance.status = aggregate([
 ])
 ```
 
-## 6. DatasetStatus Enum
+## 7. DatasetStatus Enum
 
 ```python
 NOT_INITIALIZED  # No data exists yet
@@ -95,7 +139,7 @@ STALE_SOURCE_DELAYED  # Source has no new data
 ERROR            # Pipeline failed
 ```
 
-## 7. Real-Time Status Updates
+## 8. Real-Time Status Updates
 
 On status change, publish to Centrifugo:
 
@@ -106,7 +150,7 @@ await centrifugo.publish(
 )
 ```
 
-## 8. Run Completion Updates Flow Status
+## 9. Run Completion Updates Flow Status
 
 ```python
 async def _on_run_completed(session, run):
@@ -116,14 +160,33 @@ async def _on_run_completed(session, run):
     # 2. Update StatusStore for freshness calculations
     await status_store.mark_run_success(...)
 
-    # 3. Propagate staleness to downstream
-    await lineage_resolver.propagate_staleness(session, instance_id)
+    # 3. Notify downstream dependents via observer pattern
+    observer = LineageObserver()
+    ready_ids = await observer.on_upstream_completed(session, instance_id, run.id)
 
-    # 4. Publish real-time status update
-    await centrifugo.publish(...)
+    # 4. Publish real-time status updates
+    notifier = CentrifugoNotifier()
+    for downstream_id in ready_ids:
+        await notifier.notify_upstream_ready(downstream_id, instance_id, True)
 ```
 
-## 9. Multi-Flow Instance Types
+## 10. Schedule Management
+
+Datasets can have scheduled refresh:
+
+```python
+# GET /datasets/{id}/schedule - Get schedule config
+# PUT /datasets/{id}/schedule - Update schedule
+# DELETE /datasets/{id}/schedule - Remove schedule
+
+# Schedule syncs to Prefect deployment
+await orchestrator.update_schedule(
+    deployment_id=instance.prefect_deployment_id,
+    schedule={"cron": "0 6 * * *"},  # 6am daily
+)
+```
+
+## 11. Multi-Flow Instance Types
 
 | Instance | Flows | Handles |
 |----------|-------|---------|
@@ -132,7 +195,7 @@ async def _on_run_completed(session, run):
 | ModelInstance | 3 (train/infer/monitor) | 3 deployment IDs + mlflow_experiment_id + evidently_project_id |
 | BacktestInstance | 1 (backtest) | prefect_deployment_id |
 
-## 10. References
+## 12. References
 
 See `.claude/skills/` for complete patterns:
 - `instance-resource-design/references/flow-pairing.md` - Flow pairing

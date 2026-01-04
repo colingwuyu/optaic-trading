@@ -2,20 +2,36 @@
 
 Guide for implementing data lineage tracking and freshness checking in OptAIC.
 
+## Core Architectural Principle
+
+**CRITICAL**: Lineage DAG is built when Instances are CREATED, NOT at execution time.
+
+- Build DAG at creation time
+- Create subscriptions for pub/sub pattern
+- Cache upstream IDs for fast execution checks
+
 ## Core Classes
 
 Import from `libs/orchestration`:
 
 ```python
 from libs.orchestration import (
+    # Status and freshness
     DatasetStatus,        # Status enum
     UpdateFrequency,      # Expected update schedule
     FreshnessChecker,     # Calculate staleness
     FreshnessReport,      # Freshness report structure
+    StatusStore,          # Execution metadata storage
+
+    # Lineage resolution
     LineageResolver,      # Dependency traversal
+    LineageDAG,           # DAG structure for visualization
     LineageFreshnessReport,
     UpstreamNotReadyError,
-    StatusStore,          # Execution metadata storage
+
+    # Pub/Sub pattern
+    LineageObserver,      # Handles completion events
+    CentrifugoNotifier,   # Real-time notifications
 )
 ```
 
@@ -149,27 +165,91 @@ async def on_dataset_refreshed(session, dataset_id):
         await schedule_refresh(downstream_id)
 ```
 
-## Lineage Registration
+## Lineage DAG at Instance Creation
 
-When creating a DatasetInstance with dependencies:
+When creating a DatasetInstance, build the lineage DAG and create subscriptions:
 
 ```python
-async def create_derived_dataset(session, payload, actor):
-    # Create the dataset instance
-    instance = await create_dataset_instance(session, payload, actor)
+async def create_dataset_instance(session, payload, actor):
+    # 1. Create the dataset instance
+    instance = await create_instance(session, payload, actor)
 
-    # Register lineage edges
+    # 2. Build lineage DAG from pipeline config (CREATION TIME)
     resolver = LineageResolver()
-    for upstream_ref in payload.upstream_refs:
-        await resolver.add_lineage_edge(
-            session,
-            tenant_id=actor.tenant_id,
-            upstream_id=upstream_ref.resource_id,
-            downstream_id=instance.resource_id,
-            edge_kind="data_dependency",
-        )
+    dag = await resolver.build_dag_for_instance(
+        session, instance.resource_id, actor.tenant_id
+    )
+
+    # 3. Cache upstream IDs for fast execution checks
+    if dag.has_dependencies:
+        instance.upstream_resource_ids = [str(uid) for uid in dag.upstream_ids]
+        instance.upstream_status = {str(uid): "unknown" for uid in dag.upstream_ids}
+
+        # 4. Create DatasetLineage + Subscription records (pub/sub)
+        await resolver.create_lineage_and_subscriptions(session, dag)
 
     return instance
+```
+
+## Pub/Sub Observer Pattern
+
+Downstream datasets are notified when upstreams complete via the observer pattern:
+
+```python
+from libs.orchestration import LineageObserver, CentrifugoNotifier
+
+async def on_pipeline_run_completed(session, run):
+    observer = LineageObserver()
+
+    # 1. Notify all downstreams that this upstream completed
+    # Returns list of downstreams that are now fully ready
+    ready_ids = await observer.on_upstream_completed(
+        session,
+        upstream_id=run.dataset_instance_id,
+        run_id=run.resource_id,
+    )
+
+    # 2. Publish real-time notifications to Centrifugo
+    notifier = CentrifugoNotifier()
+    for downstream_id in ready_ids:
+        await notifier.notify_upstream_ready(
+            downstream_id=downstream_id,
+            upstream_id=run.dataset_instance_id,
+            all_ready=True,
+        )
+
+async def on_pipeline_run_failed(session, run, error):
+    observer = LineageObserver()
+
+    # Mark upstream as "error" in all downstreams
+    affected_ids = await observer.on_upstream_failed(
+        session,
+        upstream_id=run.dataset_instance_id,
+        run_id=run.resource_id,
+        error=error,
+    )
+
+    # Notify downstreams of failure
+    notifier = CentrifugoNotifier()
+    for downstream_id in affected_ids:
+        await notifier.notify_upstream_failed(downstream_id, run.dataset_instance_id, error)
+```
+
+## Fast Execution Check (Cached Status)
+
+Use cached `upstream_status` for execution checks (no lineage query needed):
+
+```python
+async def check_can_execute(session, instance_id, force=False):
+    resolver = LineageResolver()
+
+    # Fast check from cached status
+    all_ready = await resolver.check_all_upstreams_ready(session, instance_id)
+
+    if not all_ready and not force:
+        raise UpstreamNotReadyError(f"Upstream dependencies not ready")
+
+    return True
 ```
 
 ## Edge Types

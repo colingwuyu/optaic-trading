@@ -10,13 +10,19 @@ This service implements the code_ref linkage pattern:
 Key Insight: The two-table pattern
 - Resource table: governance (RBAC, versioning, activity)
 - Extension table: domain data (code_ref, config, metrics)
+
+Phase 2.8a: Instance creation now also creates Flow Execution Resources:
+- When DatasetInstance is created, a Prefect deployment is also created
+- The deployment ID is stored in DatasetInstance.prefect_deployment_id
+- This deployment can be triggered to create PipelineRuns
 """
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -39,6 +45,12 @@ from libs.db.models.resource import Resource
 if TYPE_CHECKING:
     import pandas as pd
 
+    from libs.orchestration import OrchestratorAdapter
+
+from libs.orchestration import LineageResolver
+
+logger = logging.getLogger(__name__)
+
 
 class DatasetService:
     """Service for dataset operations with code_ref integration.
@@ -50,13 +62,21 @@ class DatasetService:
     The code_ref field links Definition Resources to factory-registered implementations.
     """
 
-    def __init__(self, data_dir: Path | str | None = None) -> None:
+    def __init__(
+        self,
+        data_dir: Path | str | None = None,
+        orchestrator: Optional["OrchestratorAdapter"] = None,
+    ) -> None:
         """Initialize service.
 
         Args:
             data_dir: Base directory for data storage. Defaults to ./data/
+            orchestrator: Optional orchestrator for creating Flow Execution Resources.
+                         If not provided, deployments will not be created.
         """
         self.data_dir = Path(data_dir) if data_dir else Path("./data")
+        self._orchestrator = orchestrator
+        self._lineage_resolver = LineageResolver()
 
     async def get_dataset(
         self,
@@ -260,13 +280,19 @@ class DatasetService:
         store_instance_id: UUID,
         accessor_instance_id: UUID,
         freshness_status: str = "unknown",
+        schedule: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
-        """Create a new dataset instance.
+        """Create a new dataset instance with Flow Execution Resource.
 
         A DatasetInstance is a high-level resource that combines:
         - A PipelineInstance (data source/transformation)
         - A StoreInstance (where data is stored)
         - An AccessorInstance (how data is retrieved)
+
+        Phase 2.8a: Instance creation also creates a Flow Execution Resource:
+        - Creates a Prefect deployment for the dataset refresh flow
+        - Stores the deployment ID in DatasetInstance.prefect_deployment_id
+        - The deployment can be triggered to create PipelineRuns
 
         Args:
             session: Database session
@@ -277,9 +303,10 @@ class DatasetService:
             store_instance_id: Reference to store instance
             accessor_instance_id: Reference to accessor instance
             freshness_status: Initial freshness status
+            schedule: Optional schedule configuration (cron, interval)
 
         Returns:
-            Created dataset info
+            Created dataset info including deployment_id
         """
         from uuid import uuid4
 
@@ -321,6 +348,61 @@ class DatasetService:
         )
         session.add(instance)
 
+        # Flush to ensure instance is persisted before creating lineage
+        await session.flush()
+
+        # Phase 2.8.1: Build lineage DAG and create subscriptions
+        upstream_ids: list[str] = []
+        try:
+            dag = await self._lineage_resolver.build_dag_for_instance(
+                session, resource_id, actor.tenant_id
+            )
+            if dag.has_dependencies:
+                # Store upstream IDs on instance for fast execution checks
+                instance.upstream_resource_ids = [str(uid) for uid in dag.upstream_ids]
+                # Initialize upstream status (all unknown until first run)
+                instance.upstream_status = {
+                    str(uid): "unknown" for uid in dag.upstream_ids
+                }
+                # Create lineage records and subscriptions for pub/sub
+                await self._lineage_resolver.create_lineage_and_subscriptions(
+                    session, dag
+                )
+                upstream_ids = [str(uid) for uid in dag.upstream_ids]
+                logger.info(
+                    f"Created lineage for {resource_id} with {len(dag.upstream_ids)} upstreams"
+                )
+        except Exception as e:
+            # Log but don't fail - lineage can be created later
+            logger.warning(f"Failed to create lineage for {resource_id}: {e}")
+
+        # Phase 2.8a: Create Flow Execution Resource (Prefect deployment)
+        deployment_id = None
+        if self._orchestrator:
+            try:
+                deployment_result = await self._orchestrator.create_deployment(
+                    instance_id=resource_id,
+                    flow_name=f"{name}_refresh",
+                    flow_template="dataset_refresh",
+                    parameters={
+                        "dataset_id": str(resource_id),
+                        "pipeline_instance_id": str(pipeline_instance_id),
+                    },
+                    schedule=schedule,
+                    tags={
+                        "tenant_id": str(actor.tenant_id),
+                        "resource_type": "DatasetInstance",
+                    },
+                )
+                deployment_id = deployment_result.deployment_id
+                instance.prefect_deployment_id = deployment_id
+                logger.info(
+                    f"Created deployment {deployment_id} for dataset {resource_id}"
+                )
+            except Exception as e:
+                # Log but don't fail - deployment can be created later
+                logger.warning(f"Failed to create deployment for {resource_id}: {e}")
+
         # Emit activity
         envelope = ActivityEnvelope(
             tenant_id=actor.tenant_id,
@@ -333,6 +415,8 @@ class DatasetService:
                 "pipeline_instance_id": str(pipeline_instance_id),
                 "store_instance_id": str(store_instance_id),
                 "accessor_instance_id": str(accessor_instance_id),
+                "deployment_id": deployment_id,
+                "upstream_ids": upstream_ids,
             },
         )
         await record_activity_with_outbox(session, envelope)
@@ -347,6 +431,8 @@ class DatasetService:
             "pipeline_instance_id": str(pipeline_instance_id),
             "store_instance_id": str(store_instance_id),
             "accessor_instance_id": str(accessor_instance_id),
+            "prefect_deployment_id": deployment_id,
+            "upstream_resource_ids": upstream_ids,
         }
 
     async def list_datasets(
@@ -441,4 +527,287 @@ class DatasetService:
             "row_count": len(records),
             "total_rows": instance.row_count,
             "freshness_status": instance.freshness_status,
+        }
+
+    async def get_lineage_dag(
+        self,
+        session: AsyncSession,
+        actor: ActorContext,
+        dataset_id: UUID,
+        *,
+        direction: str = "both",
+        depth: int = 3,
+    ) -> dict[str, Any]:
+        """Get lineage DAG for visualization.
+
+        Returns a DAG structure suitable for graph visualization libraries.
+
+        Args:
+            session: Database session
+            actor: Actor context for RBAC
+            dataset_id: Dataset resource ID
+            direction: "upstream", "downstream", or "both"
+            depth: Maximum traversal depth (1-10)
+
+        Returns:
+            DAG dict with nodes, edges, execution_order, freshness
+        """
+        # Get the basic graph from LineageResolver
+        graph = await self._lineage_resolver.get_lineage_graph(
+            session, dataset_id, direction=direction, max_depth=depth
+        )
+
+        # Enhance nodes with status
+        for node in graph["nodes"]:
+            node_id = UUID(node["id"])
+            instance = await session.get(DatasetInstance, node_id)
+            if instance:
+                node["status"] = instance.freshness_status
+            else:
+                node["status"] = "unknown"
+
+        # Get execution order
+        execution_order: list[list[str]] = []
+        try:
+            batches = await self._lineage_resolver.get_execution_order(
+                session, dataset_id
+            )
+            execution_order = [[str(uid) for uid in batch] for batch in batches]
+        except ValueError:
+            # Cycle detected or other issue
+            pass
+
+        # Get freshness status
+        freshness = None
+        try:
+            from libs.orchestration import FreshnessChecker, StatusStore
+
+            status_store = StatusStore(session)
+            freshness_checker = FreshnessChecker(status_store)
+            report = await self._lineage_resolver.check_upstream_freshness(
+                session, dataset_id, freshness_checker
+            )
+            freshness = {
+                "all_ready": report.all_ready,
+                "blockers": [
+                    {"id": str(uid), "status": str(report.status_map.get(uid))}
+                    for uid in report.blocking_resources
+                ],
+            }
+        except Exception:
+            # Freshness check failed - non-critical
+            pass
+
+        return {
+            "nodes": graph["nodes"],
+            "edges": graph["edges"],
+            "center_id": graph["center_id"],
+            "execution_order": execution_order,
+            "freshness": freshness,
+        }
+
+    # =========================================================================
+    # Schedule Management (Phase 2.8.5)
+    # =========================================================================
+
+    async def get_schedule(
+        self,
+        session: AsyncSession,
+        actor: ActorContext,
+        dataset_id: UUID,
+    ) -> dict[str, Any]:
+        """Get schedule configuration for a dataset.
+
+        Args:
+            session: Database session
+            actor: Actor context
+            dataset_id: Dataset resource ID
+
+        Returns:
+            Schedule info including deployment status
+        """
+        # Load resource and extension
+        resource = await session.get(Resource, dataset_id)
+        if not resource or resource.tenant_id != actor.tenant_id:
+            raise ValueError(f"Dataset {dataset_id} not found")
+
+        instance = await session.get(DatasetInstance, dataset_id)
+        if not instance:
+            raise ValueError(f"Dataset instance {dataset_id} not found")
+
+        # Get schedule config from instance
+        schedule_config = instance.config.get("schedule", {}) if instance.config else {}
+
+        # Get deployment status from orchestrator if available
+        deployment_info = None
+        if self._orchestrator and instance.prefect_deployment_id:
+            try:
+                deployment_info = await self._orchestrator.get_deployment(
+                    instance.prefect_deployment_id
+                )
+            except Exception:
+                pass
+
+        return {
+            "id": str(dataset_id),
+            "name": resource.name,
+            "schedule": {
+                "cron": schedule_config.get("cron"),
+                "interval_seconds": schedule_config.get("interval_seconds"),
+                "active": schedule_config.get("active", True),
+                "last_scheduled_at": None,  # Could be enriched from orchestrator
+                "next_scheduled_at": None,  # Could be enriched from orchestrator
+            }
+            if schedule_config
+            else None,
+            "deployment_id": instance.prefect_deployment_id,
+            "orchestrator_kind": deployment_info.get("kind")
+            if deployment_info
+            else None,
+        }
+
+    async def update_schedule(
+        self,
+        session: AsyncSession,
+        actor: ActorContext,
+        dataset_id: UUID,
+        schedule: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Update schedule configuration for a dataset.
+
+        This updates the schedule in the DatasetInstance config and
+        syncs it to the orchestrator (Prefect deployment).
+
+        Args:
+            session: Database session
+            actor: Actor context
+            dataset_id: Dataset resource ID
+            schedule: Schedule config with cron/interval_seconds/active
+
+        Returns:
+            Updated schedule info
+        """
+        # Load resource and extension
+        resource = await session.get(Resource, dataset_id)
+        if not resource or resource.tenant_id != actor.tenant_id:
+            raise ValueError(f"Dataset {dataset_id} not found")
+
+        instance = await session.get(DatasetInstance, dataset_id)
+        if not instance:
+            raise ValueError(f"Dataset instance {dataset_id} not found")
+
+        # Validate schedule config
+        if schedule.get("cron") and schedule.get("interval_seconds"):
+            raise ValueError("Cannot specify both cron and interval_seconds")
+
+        # Update config
+        config = instance.config or {}
+        config["schedule"] = {
+            "cron": schedule.get("cron"),
+            "interval_seconds": schedule.get("interval_seconds"),
+            "active": schedule.get("active", True),
+        }
+        instance.config = config
+
+        # Sync to orchestrator if available
+        sync_success = False
+        if self._orchestrator and instance.prefect_deployment_id:
+            try:
+                sync_success = await self._orchestrator.update_schedule(
+                    deployment_id=instance.prefect_deployment_id,
+                    schedule={
+                        "cron": schedule.get("cron"),
+                        "interval_seconds": schedule.get("interval_seconds"),
+                    },
+                )
+            except Exception as e:
+                logger.warning(f"Failed to sync schedule to orchestrator: {e}")
+
+        # Record activity
+        await record_activity_with_outbox(
+            session,
+            ActivityEnvelope(
+                tenant_id=actor.tenant_id,
+                actor_id=actor.principal_id,
+                resource_id=dataset_id,
+                action="schedule.updated",
+                payload={
+                    "schedule": config["schedule"],
+                    "synced_to_orchestrator": sync_success,
+                },
+            ),
+        )
+
+        await session.commit()
+
+        return {
+            "id": str(dataset_id),
+            "name": resource.name,
+            "schedule": config["schedule"],
+            "deployment_id": instance.prefect_deployment_id,
+            "orchestrator_kind": "prefect" if instance.prefect_deployment_id else None,
+        }
+
+    async def delete_schedule(
+        self,
+        session: AsyncSession,
+        actor: ActorContext,
+        dataset_id: UUID,
+    ) -> dict[str, Any]:
+        """Remove schedule from a dataset.
+
+        Disables the schedule but keeps the deployment for manual triggers.
+
+        Args:
+            session: Database session
+            actor: Actor context
+            dataset_id: Dataset resource ID
+
+        Returns:
+            Updated schedule info
+        """
+        # Load resource and extension
+        resource = await session.get(Resource, dataset_id)
+        if not resource or resource.tenant_id != actor.tenant_id:
+            raise ValueError(f"Dataset {dataset_id} not found")
+
+        instance = await session.get(DatasetInstance, dataset_id)
+        if not instance:
+            raise ValueError(f"Dataset instance {dataset_id} not found")
+
+        # Clear schedule from config
+        config = instance.config or {}
+        config.pop("schedule", None)
+        instance.config = config
+
+        # Disable schedule in orchestrator (keep deployment for manual triggers)
+        if self._orchestrator and instance.prefect_deployment_id:
+            try:
+                await self._orchestrator.update_schedule(
+                    deployment_id=instance.prefect_deployment_id,
+                    schedule={},  # Empty schedule = no schedule
+                )
+            except Exception as e:
+                logger.warning(f"Failed to disable schedule in orchestrator: {e}")
+
+        # Record activity
+        await record_activity_with_outbox(
+            session,
+            ActivityEnvelope(
+                tenant_id=actor.tenant_id,
+                actor_id=actor.principal_id,
+                resource_id=dataset_id,
+                action="schedule.deleted",
+                payload={},
+            ),
+        )
+
+        await session.commit()
+
+        return {
+            "id": str(dataset_id),
+            "name": resource.name,
+            "schedule": None,
+            "deployment_id": instance.prefect_deployment_id,
+            "orchestrator_kind": None,
         }

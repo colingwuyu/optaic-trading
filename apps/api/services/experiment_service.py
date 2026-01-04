@@ -86,7 +86,7 @@ class ExperimentService:
         resource_id = uuid4()
 
         async def domain_fn(sess: AsyncSession) -> Resource:
-            # Create Resource
+            # Create Resource first
             resource = Resource(
                 id=resource_id,
                 tenant_id=actor.tenant_id,
@@ -100,8 +100,10 @@ class ExperimentService:
                 metadata_json={"description": description} if description else {},
             )
             sess.add(resource)
+            # Flush Resource first to satisfy FK constraint on ExperimentInstance
+            await sess.flush()
 
-            # Create Extension
+            # Create Extension (references resource_id FK)
             instance = ExperimentInstance(
                 resource_id=resource_id,
                 tenant_id=actor.tenant_id,

@@ -51,7 +51,7 @@ async def test_attachment_upload_init_requires_permission(monkeypatch):
             },
         )
         assert channel_response.status_code == 201
-        channel_id = channel_response.json()["resource_id"]
+        channel_id = channel_response.json()["id"]
 
         forbidden = await client.post(
             "/attachments/upload-init",
@@ -132,7 +132,7 @@ async def test_attachment_finalize_creates_record_and_activity(monkeypatch):
             },
         )
         assert channel_response.status_code == 201
-        channel_id = channel_response.json()["resource_id"]
+        channel_id = channel_response.json()["id"]
 
         upload_init = await client.post(
             "/attachments/upload-init",

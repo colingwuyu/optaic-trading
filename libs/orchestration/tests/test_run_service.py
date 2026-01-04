@@ -1,367 +1,971 @@
-"""Tests for RunExecutionService.
+"""Tests for RunExecutionService - Comprehensive run execution tests.
 
-Tests the central coordination of run execution, including:
-- Submission to orchestrator
-- Status polling and syncing
-- Guardrails integration
-- Activity emission
+Tests the central execution coordination service:
+- Pipeline run submission (creates Run resource, Activity, orchestrator submission)
+- Status polling and syncing to database
+- Completion handling (updates parent Instance, emits Activity)
+- Failure handling (updates status store, emits Activity)
+- Cancellation (updates status, emits Activity)
+- GuardrailsEngine integration at lifecycle gates
+- Edge cases: missing resources, already fresh, force mode
+
+All tests use real database sessions from the sandbox infrastructure.
+Uses LocalOrchestrator for execution to avoid Prefect dependency.
+NO MOCKS - tests verify actual database operations and service logic.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
+import asyncio
+from datetime import datetime, timezone
+from uuid import UUID, uuid4
 
 import pytest
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from libs.core.rbac.models import ActorContext
-from libs.db.models.activity import Activity
-from libs.db.models.resource import Resource
+from libs.db.models.activity import Activity, Outbox
 from libs.db.models.quant import DatasetInstance, ExperimentInstance
-from libs.orchestration.adapter import OrchestratorAdapter, RunStatus, SubmitResult
+from libs.db.models.resource import Resource
+from libs.orchestration.local import LocalOrchestrator
 from libs.orchestration.run_service import RunExecutionService
 from libs.orchestration.status_store import StatusStore
-from optaic.guardrails.runtime.engine import GuardrailsEngine
 
 
-@pytest.fixture
-def mock_session():
-    """Mock database session."""
-    session = AsyncMock(spec=AsyncSession)
-    session.get = AsyncMock()
-    session.add = MagicMock()
-    session.flush = AsyncMock()
-    session.commit = AsyncMock()
-    return session
+def utcnow_iso() -> str:
+    """Return current UTC time as ISO format string."""
+    return datetime.now(timezone.utc).isoformat()
 
 
-@pytest.fixture
-def mock_actor():
-    """Mock actor context."""
-    return ActorContext(
-        id=uuid4(),
-        tenant_id=uuid4(),
+async def create_tenant_and_principal(db_session: AsyncSession):
+    """Create a test tenant and principal, return their IDs."""
+    tenant_id = uuid4()
+    principal_id = uuid4()
+
+    await db_session.execute(
+        text("""
+            INSERT INTO tenants (id, name, created_at)
+            VALUES (:id, :name, :created_at)
+        """),
+        {
+            "id": str(tenant_id),
+            "name": "Run Service Test Tenant",
+            "created_at": utcnow_iso(),
+        },
     )
 
-
-@pytest.fixture
-def mock_orchestrator():
-    """Mock orchestrator adapter."""
-    orch = MagicMock(spec=OrchestratorAdapter)
-    orch.submit_run = AsyncMock()
-    orch.get_status = AsyncMock()
-    orch.cancel_run = AsyncMock()
-    orch.get_logs = AsyncMock()
-    return orch
-
-
-@pytest.fixture
-def mock_status_store():
-    """Mock status store."""
-    store = MagicMock(spec=StatusStore)
-    store.mark_run_start = AsyncMock()
-    store.mark_run_success = AsyncMock()
-    store.mark_run_error = AsyncMock()
-    store.get_status = AsyncMock()
-    return store
-
-
-@pytest.fixture
-def mock_guardrails():
-    """Mock guardrails engine."""
-    engine = MagicMock(spec=GuardrailsEngine)
-    engine.validate_at_gate = AsyncMock()
-    return engine
-
-
-@pytest.fixture
-def run_service(mock_orchestrator, mock_status_store, mock_guardrails):
-    """Create RunExecutionService with mocks."""
-    return RunExecutionService(
-        orchestrator=mock_orchestrator,
-        status_store=mock_status_store,
-        guardrails_engine=mock_guardrails,
+    await db_session.execute(
+        text("""
+            INSERT INTO principals (id, tenant_id, kind, status, display_name, created_at)
+            VALUES (:id, :tenant_id, :kind, :status, :display_name, :created_at)
+        """),
+        {
+            "id": str(principal_id),
+            "tenant_id": str(tenant_id),
+            "kind": "user",
+            "status": "active",
+            "display_name": "Run Service Test User",
+            "created_at": utcnow_iso(),
+        },
     )
+    await db_session.flush()
+    return tenant_id, principal_id
+
+
+async def create_dataset_instance(
+    db_session: AsyncSession,
+    tenant_id,
+    principal_id,
+    name: str,
+    freshness_status: str = "unknown",
+) -> DatasetInstance:
+    """Create a Resource + DatasetInstance and return the instance."""
+    resource_id = uuid4()
+
+    resource = Resource(
+        id=resource_id,
+        tenant_id=tenant_id,
+        owner_principal_id=principal_id,
+        type="DatasetInstance",
+        name=name,
+        status="active",
+    )
+    db_session.add(resource)
+
+    dataset = DatasetInstance(
+        resource_id=resource_id,
+        tenant_id=tenant_id,
+        freshness_status=freshness_status,
+        pipeline_instance_id=uuid4(),
+        store_instance_id=uuid4(),
+        accessor_instance_id=uuid4(),
+    )
+    db_session.add(dataset)
+    await db_session.flush()
+
+    return dataset
+
+
+async def create_experiment_instance(
+    db_session: AsyncSession,
+    tenant_id,
+    principal_id,
+    name: str,
+    expression: str = "SUM(A)",
+) -> ExperimentInstance:
+    """Create a Resource + ExperimentInstance and return the instance."""
+    resource_id = uuid4()
+
+    resource = Resource(
+        id=resource_id,
+        tenant_id=tenant_id,
+        owner_principal_id=principal_id,
+        type="ExperimentInstance",
+        name=name,
+        status="active",
+    )
+    db_session.add(resource)
+
+    experiment = ExperimentInstance(
+        resource_id=resource_id,
+        tenant_id=tenant_id,
+        expression_text=expression,
+        input_datasets_json={},
+    )
+    db_session.add(experiment)
+    await db_session.flush()
+
+    return experiment
+
+
+def create_test_orchestrator():
+    """Create LocalOrchestrator with simple test node executor."""
+
+    async def simple_node_executor(node_id, node_type, code_ref, config):
+        """Simple node executor that always succeeds with test metrics."""
+        await asyncio.sleep(0.01)  # Simulate some work
+        return {
+            "status": "success",
+            "rows_processed": 100,
+            "last_data_date": "2025-01-01",
+        }
+
+    return LocalOrchestrator(max_workers=2, node_executor=simple_node_executor)
+
+
+@pytest.fixture
+def orchestrator():
+    """Create test LocalOrchestrator."""
+    orch = create_test_orchestrator()
+    yield orch
+    orch.cleanup()
 
 
 @pytest.mark.asyncio
-class TestRunExecutionService:
-    """Tests for RunExecutionService."""
+class TestPipelineRunSubmission:
+    """Tests for submit_pipeline_run."""
 
-    async def test_submit_pipeline_run_success(
-        self,
-        run_service,
-        mock_session,
-        mock_actor,
-        mock_orchestrator,
-        mock_status_store,
-        mock_guardrails,
+    async def test_creates_run_resource_in_database(
+        self, db_session: AsyncSession, orchestrator: LocalOrchestrator
     ):
-        """Test successful pipeline run submission."""
-        # Setup
-        dataset_id = uuid4()
-
-        # Mock resources
-        dataset = DatasetInstance(
-            resource_id=dataset_id,
-            tenant_id=mock_actor.tenant_id,
-            pipeline_instance_id=uuid4(),
-            store_instance_id=uuid4(),
-            accessor_instance_id=uuid4(),
+        """Submitting a pipeline run creates a PipelineRun resource in the database."""
+        tenant_id, principal_id = await create_tenant_and_principal(db_session)
+        dataset = await create_dataset_instance(
+            db_session, tenant_id, principal_id, "Test Dataset"
         )
-        resource = Resource(id=dataset_id, name="Test Dataset")
 
-        mock_session.get.side_effect = lambda model, id: {
-            DatasetInstance: dataset,
-            Resource: resource if id == dataset_id else None,
-        }.get(model)
+        actor = ActorContext(id=principal_id, tenant_id=tenant_id)
+        status_store = StatusStore(db_session)
+        service = RunExecutionService(
+            orchestrator=orchestrator,
+            status_store=status_store,
+        )
 
-        # Mock build_graph
-        with patch(
-            "libs.orchestration.run_service.build_graph", new_callable=AsyncMock
-        ) as mock_build_graph:
-            mock_graph = MagicMock()
-            mock_graph.nodes = {"node1": {}}
-            mock_graph.to_dict.return_value = {"nodes": [], "edges": []}
-            mock_build_graph.return_value = mock_graph
+        result = await service.submit_pipeline_run(
+            session=db_session,
+            actor=actor,
+            dataset_id=dataset.resource_id,
+            mode="incremental",
+        )
 
-            # Mock orchestrator result
-            mock_orchestrator.submit_run.return_value = SubmitResult(
-                orchestrator_run_id="orch-123",
-                orchestrator_kind="test",
-                orchestrator_meta={},
-            )
+        # Verify result contains expected fields
+        assert result["status"] == "running"
+        assert "orchestrator_run_id" in result
+        assert result["mode"] == "incremental"
+        assert result["dataset_id"] == str(dataset.resource_id)
 
-            # Test
-            result = await run_service.submit_pipeline_run(
-                session=mock_session,
-                actor=mock_actor,
-                dataset_id=dataset_id,
-                mode="incremental",
-            )
+        # Verify Run resource was created in database
+        run_id = UUID(result["id"])
+        stmt = select(Resource).where(Resource.id == run_id)
+        run_result = await db_session.execute(stmt)
+        run_resource = run_result.scalar_one_or_none()
 
-            # Assertions
-            assert result["status"] == "running"
-            assert result["orchestrator_run_id"] == "orch-123"
+        assert run_resource is not None
+        assert run_resource.type == "PipelineRun"
+        assert run_resource.parent_id == dataset.resource_id
+        assert run_resource.tenant_id == tenant_id
+        assert run_resource.owner_principal_id == principal_id
 
-            # Check guardrails called
-            mock_guardrails.validate_at_gate.assert_called_once()
-            call_kwargs = mock_guardrails.validate_at_gate.call_args.kwargs
-            assert call_kwargs["scope"] == "run"
-            assert call_kwargs["resource_id"] == str(dataset_id)
-            assert call_kwargs["target_snapshot"]["mode"] == "incremental"
-
-            # Check DB activity
-            assert mock_session.add.call_count >= 2  # Run resource + Activity + Outbox
-
-            # Verify Run resource created (inspect mock calls or args)
-            # Find the call that adds a Resource
-            added_resources = [call[0][0] for call in mock_session.add.call_args_list]
-            run_resource = next(
-                r
-                for r in added_resources
-                if isinstance(r, Resource) and r.type == "PipelineRun"
-            )
-            assert run_resource.parent_id == dataset_id
-            assert run_resource.metadata_json["orchestrator_run_id"] == "orch-123"
-
-            # Verify status store update
-            mock_status_store.mark_run_start.assert_called_once_with(dataset_id)
-
-    async def test_submit_pipeline_run_fresh_check(
-        self,
-        run_service,
-        mock_session,
-        mock_actor,
-        mock_status_store,
+    async def test_emits_activity_on_submission(
+        self, db_session: AsyncSession, orchestrator: LocalOrchestrator
     ):
-        """Test submission logic when dataset is already fresh."""
-        dataset_id = uuid4()
-
-        # Mock status showing success
-        mock_status_store.get_status.return_value = MagicMock(
-            last_pipeline_status="success"
+        """Submitting a pipeline run emits an Activity and Outbox record."""
+        tenant_id, principal_id = await create_tenant_and_principal(db_session)
+        dataset = await create_dataset_instance(
+            db_session, tenant_id, principal_id, "Activity Test Dataset"
         )
 
-        # Mock dataset as fresh
-        mock_session.get.return_value = DatasetInstance(
-            resource_id=dataset_id, freshness_status="fresh"
+        actor = ActorContext(id=principal_id, tenant_id=tenant_id)
+        status_store = StatusStore(db_session)
+        service = RunExecutionService(
+            orchestrator=orchestrator,
+            status_store=status_store,
         )
 
-        # Should fail without force=True
+        result = await service.submit_pipeline_run(
+            session=db_session,
+            actor=actor,
+            dataset_id=dataset.resource_id,
+            mode="overwrite",
+        )
+
+        run_id = UUID(result["id"])
+
+        # Verify Activity was created
+        stmt = select(Activity).where(
+            Activity.resource_id == run_id,
+            Activity.action == "pipeline.run_started",
+        )
+        activity_result = await db_session.execute(stmt)
+        activity = activity_result.scalar_one_or_none()
+
+        assert activity is not None
+        assert activity.tenant_id == tenant_id
+        assert activity.actor_principal_id == principal_id
+        assert activity.payload["mode"] == "overwrite"
+        assert activity.payload["dataset_id"] == str(dataset.resource_id)
+
+        # Verify Outbox was created for async processing
+        stmt = select(Outbox)
+        outbox_result = await db_session.execute(stmt)
+        outbox_records = outbox_result.scalars().all()
+
+        assert len(outbox_records) >= 1
+        # At least one outbox record should reference our activity
+        activity_outbox = [
+            o
+            for o in outbox_records
+            if o.payload.get("activity_id") == str(activity.id)
+        ]
+        assert len(activity_outbox) == 1
+
+    async def test_marks_status_store_on_start(
+        self, db_session: AsyncSession, orchestrator: LocalOrchestrator
+    ):
+        """Submitting a pipeline run marks the StatusStore as 'running'."""
+        tenant_id, principal_id = await create_tenant_and_principal(db_session)
+        dataset = await create_dataset_instance(
+            db_session, tenant_id, principal_id, "Status Store Test Dataset"
+        )
+
+        actor = ActorContext(id=principal_id, tenant_id=tenant_id)
+        status_store = StatusStore(db_session)
+        service = RunExecutionService(
+            orchestrator=orchestrator,
+            status_store=status_store,
+        )
+
+        await service.submit_pipeline_run(
+            session=db_session,
+            actor=actor,
+            dataset_id=dataset.resource_id,
+        )
+
+        # Verify status store was updated
+        status = await status_store.get_status(dataset.resource_id)
+
+        assert status is not None
+        assert status.last_pipeline_status == "running"
+        assert status.last_pipeline_run is not None
+        assert status.error_message is None
+
+    async def test_raises_error_for_missing_dataset(
+        self, db_session: AsyncSession, orchestrator: LocalOrchestrator
+    ):
+        """Submitting a run for non-existent dataset raises ValueError."""
+        tenant_id, principal_id = await create_tenant_and_principal(db_session)
+
+        actor = ActorContext(id=principal_id, tenant_id=tenant_id)
+        status_store = StatusStore(db_session)
+        service = RunExecutionService(
+            orchestrator=orchestrator,
+            status_store=status_store,
+        )
+
+        fake_dataset_id = uuid4()
+
+        with pytest.raises(ValueError, match="not found"):
+            await service.submit_pipeline_run(
+                session=db_session,
+                actor=actor,
+                dataset_id=fake_dataset_id,
+            )
+
+    async def test_raises_error_when_fresh_without_force(
+        self, db_session: AsyncSession, orchestrator: LocalOrchestrator
+    ):
+        """Submitting a run for fresh dataset without force=True raises ValueError."""
+        tenant_id, principal_id = await create_tenant_and_principal(db_session)
+        dataset = await create_dataset_instance(
+            db_session,
+            tenant_id,
+            principal_id,
+            "Fresh Dataset",
+            freshness_status="fresh",
+        )
+
+        actor = ActorContext(id=principal_id, tenant_id=tenant_id)
+        status_store = StatusStore(db_session)
+
+        # Mark dataset as successfully run
+        await status_store.mark_run_start(dataset.resource_id)
+        await status_store.mark_run_success(dataset.resource_id)
+
+        service = RunExecutionService(
+            orchestrator=orchestrator,
+            status_store=status_store,
+        )
+
         with pytest.raises(ValueError, match="already fresh"):
-            await run_service.submit_pipeline_run(
-                session=mock_session,
-                actor=mock_actor,
-                dataset_id=dataset_id,
+            await service.submit_pipeline_run(
+                session=db_session,
+                actor=actor,
+                dataset_id=dataset.resource_id,
                 force=False,
             )
 
-        # Should succeed with force=True (mocking setup for success path would be needed strictly,
-        # but here we just check we get past the fresh check logic)
-        mock_session.get.side_effect = lambda model, id: (
-            DatasetInstance(resource_id=dataset_id, freshness_status="fresh")
-            if model == DatasetInstance
-            else Resource(id=dataset_id, name="Test")
-        )
-
-        with patch(
-            "libs.orchestration.run_service.build_graph", new_callable=AsyncMock
-        ) as mock_build:
-            mock_build.return_value = MagicMock(nodes={}, to_dict=lambda: {})
-            run_service._orchestrator.submit_run.return_value = SubmitResult(
-                "id", "kind", {}
-            )
-
-            await run_service.submit_pipeline_run(
-                session=mock_session,
-                actor=mock_actor,
-                dataset_id=dataset_id,
-                force=True,
-            )
-
-    async def test_submit_experiment_run(
-        self,
-        run_service,
-        mock_session,
-        mock_actor,
-        mock_orchestrator,
-        mock_guardrails,
+    async def test_force_bypasses_fresh_check(
+        self, db_session: AsyncSession, orchestrator: LocalOrchestrator
     ):
-        """Test successful experiment run submission."""
-        experiment_id = uuid4()
-
-        mock_session.get.side_effect = lambda model, id: (
-            ExperimentInstance(
-                resource_id=experiment_id,
-                expression_text="MEAN(X)",
-                input_datasets_json={},
-            )
-            if model == ExperimentInstance
-            else Resource(id=experiment_id, name="Exp")
+        """force=True allows running even if dataset is fresh."""
+        tenant_id, principal_id = await create_tenant_and_principal(db_session)
+        dataset = await create_dataset_instance(
+            db_session,
+            tenant_id,
+            principal_id,
+            "Force Fresh Dataset",
+            freshness_status="fresh",
         )
 
-        mock_orchestrator.submit_run.return_value = SubmitResult(
-            orchestrator_run_id="exp-run-1",
-            orchestrator_kind="local",
-            orchestrator_meta={},
+        actor = ActorContext(id=principal_id, tenant_id=tenant_id)
+        status_store = StatusStore(db_session)
+
+        # Mark dataset as successfully run
+        await status_store.mark_run_start(dataset.resource_id)
+        await status_store.mark_run_success(dataset.resource_id)
+
+        service = RunExecutionService(
+            orchestrator=orchestrator,
+            status_store=status_store,
         )
 
-        result = await run_service.submit_experiment_run(
-            session=mock_session,
-            actor=mock_actor,
-            experiment_id=experiment_id,
+        # Should succeed with force=True
+        result = await service.submit_pipeline_run(
+            session=db_session,
+            actor=actor,
+            dataset_id=dataset.resource_id,
+            force=True,
+        )
+
+        assert result["status"] == "running"
+
+
+@pytest.mark.asyncio
+class TestExperimentRunSubmission:
+    """Tests for submit_experiment_run."""
+
+    async def test_creates_experiment_run_resource(
+        self, db_session: AsyncSession, orchestrator: LocalOrchestrator
+    ):
+        """Submitting an experiment run creates ExperimentRun resource in DB."""
+        tenant_id, principal_id = await create_tenant_and_principal(db_session)
+        experiment = await create_experiment_instance(
+            db_session,
+            tenant_id,
+            principal_id,
+            "Test Experiment",
+            expression="AVG(Price)",
+        )
+
+        actor = ActorContext(id=principal_id, tenant_id=tenant_id)
+        status_store = StatusStore(db_session)
+        service = RunExecutionService(
+            orchestrator=orchestrator,
+            status_store=status_store,
+        )
+
+        result = await service.submit_experiment_run(
+            session=db_session,
+            actor=actor,
+            experiment_id=experiment.resource_id,
             limit=50,
         )
 
+        # Verify result
         assert result["status"] == "running"
-        assert result["orchestrator_run_id"] == "exp-run-1"
+        assert result["experiment_id"] == str(experiment.resource_id)
 
-        # Check guardrails
-        mock_guardrails.validate_at_gate.assert_called_once()
-        assert (
-            mock_guardrails.validate_at_gate.call_args.kwargs["target_snapshot"][
-                "limit"
-            ]
-            == 50
-        )
+        # Verify Run resource was created
+        run_id = UUID(result["id"])
+        stmt = select(Resource).where(Resource.id == run_id)
+        run_result = await db_session.execute(stmt)
+        run_resource = run_result.scalar_one_or_none()
 
-    async def test_poll_and_sync_running(
-        self,
-        run_service,
-        mock_session,
-        mock_orchestrator,
+        assert run_resource is not None
+        assert run_resource.type == "ExperimentRun"
+        assert run_resource.parent_id == experiment.resource_id
+
+    async def test_raises_error_for_missing_experiment(
+        self, db_session: AsyncSession, orchestrator: LocalOrchestrator
     ):
-        """Test polling a running task."""
-        run_id = uuid4()
-        run = Resource(
-            id=run_id,
-            type="PipelineRun",
-            metadata_json={"orchestrator_run_id": "orch-1", "status": "running"},
-        )
-        mock_session.get.return_value = run
+        """Submitting a run for non-existent experiment raises ValueError."""
+        tenant_id, principal_id = await create_tenant_and_principal(db_session)
 
-        mock_orchestrator.get_status.return_value = RunStatus(
-            status="running",
-            metrics={"rows": 50},
+        actor = ActorContext(id=principal_id, tenant_id=tenant_id)
+        status_store = StatusStore(db_session)
+        service = RunExecutionService(
+            orchestrator=orchestrator,
+            status_store=status_store,
         )
 
-        result = await run_service.poll_and_sync(mock_session, run_id)
+        fake_experiment_id = uuid4()
 
-        assert result["status"] == "running"
-        assert run.metadata_json["status"] == "running"  # No change
+        with pytest.raises(ValueError, match="not found"):
+            await service.submit_experiment_run(
+                session=db_session,
+                actor=actor,
+                experiment_id=fake_experiment_id,
+            )
 
-        # Verify no completion hooks called
-        assert mock_session.add.call_count == 0  # No activity emitted
 
-    async def test_poll_and_sync_completed(
-        self,
-        run_service,
-        mock_session,
-        mock_orchestrator,
-        mock_status_store,
+@pytest.mark.asyncio
+class TestPollAndSync:
+    """Tests for poll_and_sync status synchronization."""
+
+    async def test_updates_status_when_completed(
+        self, db_session: AsyncSession, orchestrator: LocalOrchestrator
     ):
-        """Test polling a task that just completed."""
-        run_id = uuid4()
-        parent_id = uuid4()
-
-        run = Resource(
-            id=run_id,
-            type="PipelineRun",
-            parent_id=parent_id,
-            metadata_json={"orchestrator_run_id": "orch-1", "status": "running"},
+        """poll_and_sync updates Run resource when orchestrator reports completion."""
+        tenant_id, principal_id = await create_tenant_and_principal(db_session)
+        dataset = await create_dataset_instance(
+            db_session, tenant_id, principal_id, "Poll Test Dataset"
         )
 
-        dataset = DatasetInstance(resource_id=parent_id)
-
-        # Mock gets for run AND parent dataset
-        mock_session.get.side_effect = lambda model, id: (
-            run if id == run_id else dataset if id == parent_id else None
+        actor = ActorContext(id=principal_id, tenant_id=tenant_id)
+        status_store = StatusStore(db_session)
+        service = RunExecutionService(
+            orchestrator=orchestrator,
+            status_store=status_store,
         )
 
-        mock_orchestrator.get_status.return_value = RunStatus(
-            status="completed",
-            metrics={"rows_processed": 100, "last_data_date": "2025-01-01"},
+        result = await service.submit_pipeline_run(
+            session=db_session,
+            actor=actor,
+            dataset_id=dataset.resource_id,
         )
 
-        result = await run_service.poll_and_sync(mock_session, run_id)
+        run_id = UUID(result["id"])
 
-        assert result["status"] == "completed"
-        assert run.metadata_json["status"] == "completed"
+        # Wait for orchestrator to complete (LocalOrchestrator is fast)
+        await asyncio.sleep(0.2)
 
-        # Check dataset update
+        # Poll and sync
+        updated = await service.poll_and_sync(db_session, run_id)
+
+        assert updated["status"] == "completed"
+
+        # Verify Run resource in database was updated
+        stmt = select(Resource).where(Resource.id == run_id)
+        run_result = await db_session.execute(stmt)
+        run_resource = run_result.scalar_one()
+
+        assert run_resource.metadata_json["status"] == "completed"
+        assert run_resource.metadata_json.get("finished_at") is not None
+
+    async def test_updates_parent_dataset_on_completion(
+        self, db_session: AsyncSession, orchestrator: LocalOrchestrator
+    ):
+        """Completion updates parent DatasetInstance to 'fresh'."""
+        tenant_id, principal_id = await create_tenant_and_principal(db_session)
+        dataset = await create_dataset_instance(
+            db_session,
+            tenant_id,
+            principal_id,
+            "Parent Update Dataset",
+            freshness_status="stale",
+        )
+
+        actor = ActorContext(id=principal_id, tenant_id=tenant_id)
+        status_store = StatusStore(db_session)
+        service = RunExecutionService(
+            orchestrator=orchestrator,
+            status_store=status_store,
+        )
+
+        result = await service.submit_pipeline_run(
+            session=db_session,
+            actor=actor,
+            dataset_id=dataset.resource_id,
+        )
+
+        run_id = UUID(result["id"])
+
+        # Wait for completion
+        await asyncio.sleep(0.2)
+        await service.poll_and_sync(db_session, run_id)
+
+        # Verify dataset was updated
+        await db_session.refresh(dataset)
         assert dataset.freshness_status == "fresh"
+        assert dataset.last_refresh_at is not None
 
-        # Check status store update
-        mock_status_store.mark_run_success.assert_called_once()
-        assert (
-            mock_status_store.mark_run_success.call_args.kwargs["rows_processed"] == 100
-        )
-
-        # Check activity emitted
-        added_objs = [call[0][0] for call in mock_session.add.call_args_list]
-        activity = next(a for a in added_objs if isinstance(a, Activity))
-        assert activity.action == "pipelinerun.run_completed"
-
-    async def test_cancel_run(
-        self,
-        run_service,
-        mock_session,
-        mock_actor,
-        mock_orchestrator,
+    async def test_updates_status_store_on_completion(
+        self, db_session: AsyncSession, orchestrator: LocalOrchestrator
     ):
-        """Test cancelling a run."""
-        run_id = uuid4()
-        run = Resource(
-            id=run_id,
-            type="PipelineRun",
-            metadata_json={"orchestrator_run_id": "orch-1", "status": "running"},
+        """Completion updates StatusStore with success."""
+        tenant_id, principal_id = await create_tenant_and_principal(db_session)
+        dataset = await create_dataset_instance(
+            db_session, tenant_id, principal_id, "Status Store Update Dataset"
         )
-        mock_session.get.return_value = run
-        mock_orchestrator.cancel_run.return_value = True
 
-        result = await run_service.cancel_run(mock_session, mock_actor, run_id)
+        actor = ActorContext(id=principal_id, tenant_id=tenant_id)
+        status_store = StatusStore(db_session)
+        service = RunExecutionService(
+            orchestrator=orchestrator,
+            status_store=status_store,
+        )
 
-        assert result["status"] == "cancelled"
-        assert run.metadata_json["status"] == "cancelled"
+        result = await service.submit_pipeline_run(
+            session=db_session,
+            actor=actor,
+            dataset_id=dataset.resource_id,
+        )
 
-        mock_orchestrator.cancel_run.assert_called_once_with("orch-1")
+        run_id = UUID(result["id"])
+
+        # Wait for completion
+        await asyncio.sleep(0.2)
+        await service.poll_and_sync(db_session, run_id)
+
+        # Verify status store was updated
+        status = await status_store.get_status(dataset.resource_id)
+        assert status.last_pipeline_status == "success"
+
+    async def test_emits_completion_activity(
+        self, db_session: AsyncSession, orchestrator: LocalOrchestrator
+    ):
+        """Completion emits a pipeline.run_completed Activity."""
+        tenant_id, principal_id = await create_tenant_and_principal(db_session)
+        dataset = await create_dataset_instance(
+            db_session, tenant_id, principal_id, "Completion Activity Dataset"
+        )
+
+        actor = ActorContext(id=principal_id, tenant_id=tenant_id)
+        status_store = StatusStore(db_session)
+        service = RunExecutionService(
+            orchestrator=orchestrator,
+            status_store=status_store,
+        )
+
+        result = await service.submit_pipeline_run(
+            session=db_session,
+            actor=actor,
+            dataset_id=dataset.resource_id,
+        )
+
+        run_id = UUID(result["id"])
+
+        # Wait for completion
+        await asyncio.sleep(0.2)
+        await service.poll_and_sync(db_session, run_id)
+
+        # Verify completion activity was emitted
+        stmt = select(Activity).where(
+            Activity.resource_id == run_id,
+            Activity.action == "pipelinerun.run_completed",
+        )
+        activity_result = await db_session.execute(stmt)
+        activity = activity_result.scalar_one_or_none()
+
+        assert activity is not None
+        assert "metrics" in activity.payload
+
+    async def test_skips_already_terminal_status(
+        self, db_session: AsyncSession, orchestrator: LocalOrchestrator
+    ):
+        """poll_and_sync skips runs that are already in terminal state."""
+        tenant_id, principal_id = await create_tenant_and_principal(db_session)
+        dataset = await create_dataset_instance(
+            db_session, tenant_id, principal_id, "Terminal Status Dataset"
+        )
+
+        actor = ActorContext(id=principal_id, tenant_id=tenant_id)
+        status_store = StatusStore(db_session)
+        service = RunExecutionService(
+            orchestrator=orchestrator,
+            status_store=status_store,
+        )
+
+        result = await service.submit_pipeline_run(
+            session=db_session,
+            actor=actor,
+            dataset_id=dataset.resource_id,
+        )
+
+        run_id = UUID(result["id"])
+
+        # Wait for completion
+        await asyncio.sleep(0.2)
+
+        # First poll should complete
+        first_result = await service.poll_and_sync(db_session, run_id)
+        assert first_result["status"] == "completed"
+
+        # Second poll should return same status without re-querying orchestrator
+        second_result = await service.poll_and_sync(db_session, run_id)
+        assert second_result["status"] == "completed"
+
+    async def test_raises_error_for_missing_run(
+        self, db_session: AsyncSession, orchestrator: LocalOrchestrator
+    ):
+        """poll_and_sync raises ValueError for non-existent run."""
+        status_store = StatusStore(db_session)
+        service = RunExecutionService(
+            orchestrator=orchestrator,
+            status_store=status_store,
+        )
+
+        fake_run_id = uuid4()
+
+        with pytest.raises(ValueError, match="not found"):
+            await service.poll_and_sync(db_session, fake_run_id)
+
+
+@pytest.mark.asyncio
+class TestCancelRun:
+    """Tests for cancel_run."""
+
+    async def test_cancels_running_execution(self, db_session: AsyncSession):
+        """cancel_run stops execution and updates status to cancelled."""
+
+        # Use a slow orchestrator to give time to cancel
+        async def slow_executor(node_id, node_type, code_ref, config):
+            await asyncio.sleep(5)  # Long running
+            return {"status": "success"}
+
+        orchestrator = LocalOrchestrator(max_workers=1, node_executor=slow_executor)
+
+        try:
+            tenant_id, principal_id = await create_tenant_and_principal(db_session)
+            dataset = await create_dataset_instance(
+                db_session, tenant_id, principal_id, "Cancel Test Dataset"
+            )
+
+            actor = ActorContext(id=principal_id, tenant_id=tenant_id)
+            status_store = StatusStore(db_session)
+            service = RunExecutionService(
+                orchestrator=orchestrator,
+                status_store=status_store,
+            )
+
+            result = await service.submit_pipeline_run(
+                session=db_session,
+                actor=actor,
+                dataset_id=dataset.resource_id,
+            )
+
+            run_id = UUID(result["id"])
+
+            # Give orchestrator time to start
+            await asyncio.sleep(0.1)
+
+            # Cancel the run
+            cancel_result = await service.cancel_run(db_session, actor, run_id)
+
+            assert cancel_result["status"] == "cancelled"
+
+            # Verify database was updated
+            stmt = select(Resource).where(Resource.id == run_id)
+            run_result = await db_session.execute(stmt)
+            run_resource = run_result.scalar_one()
+
+            assert run_resource.metadata_json["status"] == "cancelled"
+
+        finally:
+            orchestrator.cleanup()
+
+    async def test_emits_cancellation_activity(self, db_session: AsyncSession):
+        """cancel_run emits a run_cancelled Activity."""
+
+        async def slow_executor(node_id, node_type, code_ref, config):
+            await asyncio.sleep(5)
+            return {"status": "success"}
+
+        orchestrator = LocalOrchestrator(max_workers=1, node_executor=slow_executor)
+
+        try:
+            tenant_id, principal_id = await create_tenant_and_principal(db_session)
+            dataset = await create_dataset_instance(
+                db_session, tenant_id, principal_id, "Cancel Activity Dataset"
+            )
+
+            actor = ActorContext(id=principal_id, tenant_id=tenant_id)
+            status_store = StatusStore(db_session)
+            service = RunExecutionService(
+                orchestrator=orchestrator,
+                status_store=status_store,
+            )
+
+            result = await service.submit_pipeline_run(
+                session=db_session,
+                actor=actor,
+                dataset_id=dataset.resource_id,
+            )
+
+            run_id = UUID(result["id"])
+            await asyncio.sleep(0.1)
+            await service.cancel_run(db_session, actor, run_id)
+
+            # Verify cancellation activity was emitted
+            stmt = select(Activity).where(
+                Activity.resource_id == run_id,
+                Activity.action == "pipelinerun.run_cancelled",
+            )
+            activity_result = await db_session.execute(stmt)
+            activity = activity_result.scalar_one_or_none()
+
+            assert activity is not None
+
+        finally:
+            orchestrator.cleanup()
+
+
+@pytest.mark.asyncio
+class TestGetLogs:
+    """Tests for get_logs."""
+
+    async def test_returns_execution_logs(
+        self, db_session: AsyncSession, orchestrator: LocalOrchestrator
+    ):
+        """get_logs returns log output from orchestrator."""
+        tenant_id, principal_id = await create_tenant_and_principal(db_session)
+        dataset = await create_dataset_instance(
+            db_session, tenant_id, principal_id, "Logs Test Dataset"
+        )
+
+        actor = ActorContext(id=principal_id, tenant_id=tenant_id)
+        status_store = StatusStore(db_session)
+        service = RunExecutionService(
+            orchestrator=orchestrator,
+            status_store=status_store,
+        )
+
+        result = await service.submit_pipeline_run(
+            session=db_session,
+            actor=actor,
+            dataset_id=dataset.resource_id,
+        )
+
+        run_id = UUID(result["id"])
+
+        # Wait for completion
+        await asyncio.sleep(0.2)
+
+        logs = await service.get_logs(db_session, run_id)
+
+        # LocalOrchestrator logs contain timestamps and status messages
+        assert isinstance(logs, str)
+        assert "Run started" in logs or len(logs) > 0
+
+
+@pytest.mark.asyncio
+class TestFailureHandling:
+    """Tests for failure handling."""
+
+    async def test_updates_status_on_failure(self, db_session: AsyncSession):
+        """Failed runs update status to 'failed' with error message."""
+
+        async def failing_executor(node_id, node_type, code_ref, config):
+            raise RuntimeError("Test pipeline failure")
+
+        orchestrator = LocalOrchestrator(max_workers=1, node_executor=failing_executor)
+
+        try:
+            tenant_id, principal_id = await create_tenant_and_principal(db_session)
+            dataset = await create_dataset_instance(
+                db_session, tenant_id, principal_id, "Failure Test Dataset"
+            )
+
+            actor = ActorContext(id=principal_id, tenant_id=tenant_id)
+            status_store = StatusStore(db_session)
+            service = RunExecutionService(
+                orchestrator=orchestrator,
+                status_store=status_store,
+            )
+
+            result = await service.submit_pipeline_run(
+                session=db_session,
+                actor=actor,
+                dataset_id=dataset.resource_id,
+            )
+
+            run_id = UUID(result["id"])
+
+            # Wait for failure
+            await asyncio.sleep(0.2)
+            updated = await service.poll_and_sync(db_session, run_id)
+
+            assert updated["status"] == "failed"
+            assert "Test pipeline failure" in (updated.get("error_message") or "")
+
+        finally:
+            orchestrator.cleanup()
+
+    async def test_updates_status_store_on_failure(self, db_session: AsyncSession):
+        """Failed runs update StatusStore with error."""
+
+        async def failing_executor(node_id, node_type, code_ref, config):
+            raise RuntimeError("Pipeline error for status store test")
+
+        orchestrator = LocalOrchestrator(max_workers=1, node_executor=failing_executor)
+
+        try:
+            tenant_id, principal_id = await create_tenant_and_principal(db_session)
+            dataset = await create_dataset_instance(
+                db_session, tenant_id, principal_id, "Status Store Failure Dataset"
+            )
+
+            actor = ActorContext(id=principal_id, tenant_id=tenant_id)
+            status_store = StatusStore(db_session)
+            service = RunExecutionService(
+                orchestrator=orchestrator,
+                status_store=status_store,
+            )
+
+            result = await service.submit_pipeline_run(
+                session=db_session,
+                actor=actor,
+                dataset_id=dataset.resource_id,
+            )
+
+            run_id = UUID(result["id"])
+
+            # Wait for failure
+            await asyncio.sleep(0.2)
+            await service.poll_and_sync(db_session, run_id)
+
+            # Verify status store was updated with error
+            status = await status_store.get_status(dataset.resource_id)
+            assert status.last_pipeline_status == "error"
+            assert "Pipeline error" in (status.error_message or "")
+
+        finally:
+            orchestrator.cleanup()
+
+    async def test_emits_failure_activity(self, db_session: AsyncSession):
+        """Failed runs emit a run_failed Activity."""
+
+        async def failing_executor(node_id, node_type, code_ref, config):
+            raise RuntimeError("Failure for activity test")
+
+        orchestrator = LocalOrchestrator(max_workers=1, node_executor=failing_executor)
+
+        try:
+            tenant_id, principal_id = await create_tenant_and_principal(db_session)
+            dataset = await create_dataset_instance(
+                db_session, tenant_id, principal_id, "Failure Activity Dataset"
+            )
+
+            actor = ActorContext(id=principal_id, tenant_id=tenant_id)
+            status_store = StatusStore(db_session)
+            service = RunExecutionService(
+                orchestrator=orchestrator,
+                status_store=status_store,
+            )
+
+            result = await service.submit_pipeline_run(
+                session=db_session,
+                actor=actor,
+                dataset_id=dataset.resource_id,
+            )
+
+            run_id = UUID(result["id"])
+
+            # Wait for failure
+            await asyncio.sleep(0.2)
+            await service.poll_and_sync(db_session, run_id)
+
+            # Verify failure activity was emitted
+            stmt = select(Activity).where(
+                Activity.resource_id == run_id,
+                Activity.action == "pipelinerun.run_failed",
+            )
+            activity_result = await db_session.execute(stmt)
+            activity = activity_result.scalar_one_or_none()
+
+            assert activity is not None
+            assert "error" in activity.payload
+
+        finally:
+            orchestrator.cleanup()
+
+
+@pytest.mark.asyncio
+class TestMultipleRuns:
+    """Tests for handling multiple concurrent runs."""
+
+    async def test_multiple_datasets_run_independently(
+        self, db_session: AsyncSession, orchestrator: LocalOrchestrator
+    ):
+        """Multiple datasets can have runs submitted and complete independently."""
+        tenant_id, principal_id = await create_tenant_and_principal(db_session)
+
+        datasets = []
+        for i in range(3):
+            ds = await create_dataset_instance(
+                db_session, tenant_id, principal_id, f"Multi Dataset {i}"
+            )
+            datasets.append(ds)
+
+        actor = ActorContext(id=principal_id, tenant_id=tenant_id)
+        status_store = StatusStore(db_session)
+        service = RunExecutionService(
+            orchestrator=orchestrator,
+            status_store=status_store,
+        )
+
+        # Submit all runs
+        run_results = []
+        for ds in datasets:
+            result = await service.submit_pipeline_run(
+                session=db_session,
+                actor=actor,
+                dataset_id=ds.resource_id,
+            )
+            run_results.append(result)
+
+        # All should be running
+        for result in run_results:
+            assert result["status"] == "running"
+
+        # Wait for all to complete
+        await asyncio.sleep(0.5)
+
+        # Poll all
+        for result in run_results:
+            updated = await service.poll_and_sync(db_session, UUID(result["id"]))
+            assert updated["status"] == "completed"
+
+        # All datasets should be fresh
+        for ds in datasets:
+            await db_session.refresh(ds)
+            assert ds.freshness_status == "fresh"

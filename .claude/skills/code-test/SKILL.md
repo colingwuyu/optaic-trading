@@ -50,6 +50,63 @@ Apply when:
 
 ## Test Categories
 
+### 0. Multi-Account Sandbox Tests (PRIORITY)
+
+For RBAC, audit, lineage, and realistic domain tests, use the sandbox fixtures:
+
+```python
+from apps.api.tests.conftest import (
+    SandboxEnvironment,
+    sandbox_env,
+    create_resource,
+    create_role_binding,
+    create_activity,
+    create_lineage_edge,
+)
+
+@pytest.mark.asyncio
+async def test_cross_tenant_isolation(db_session, sandbox_env):
+    """Test tenant isolation with real multi-tenant data."""
+    alpha = sandbox_env.tenant_alpha
+    beta = sandbox_env.tenant_beta
+
+    # Create resource in Alpha
+    resource_id = await create_resource(
+        db_session, alpha.id, alpha.admin.id,
+        "DatasetInstance", "Alpha Data",
+        parent_id=alpha.spaces[0],
+    )
+
+    # Query from Beta - should NOT see Alpha's data
+    stmt = select(Resource).where(Resource.tenant_id == beta.id)
+    result = await db_session.execute(stmt)
+    assert resource_id not in [r.id for r in result.scalars().all()]
+```
+
+**CRITICAL:** Use ORM models, not raw SQL, for test data creation.
+
+### Test Anti-Patterns (FORBIDDEN)
+
+```python
+# FORBIDDEN: Empty test body - fake test that inflates count
+async def test_something(self) -> None:
+    pass  # <-- NEVER DO THIS!
+
+# FORBIDDEN: Silent catch-and-pass hides real failures
+try:
+    result = await service.do_something()
+except ImportError:
+    pass  # <-- NEVER DO THIS!
+
+# FORBIDDEN: "Checking" for dependencies not in pyproject.toml
+try:
+    import some_package  # Not in pyproject.toml
+except ImportError:
+    pass  # <-- FIX PYPROJECT.TOML INSTEAD!
+```
+
+**Dependency Policy:** All imports must be in `pyproject.toml`. Import errors indicate broken project setup and should FAIL tests, not be silently skipped.
+
 ### 1. Activity Emission Tests
 
 Verify all mutations emit correct ActivityEnvelope:
@@ -191,6 +248,7 @@ Check `conftest.py` files for available fixtures before creating new ones.
 
 ## Reference Files
 
+- [Sandbox Tests](references/sandbox-tests.md) - Multi-account sandbox testing patterns (PRIORITY)
 - [Activity Tests](references/activity-tests.md) - Activity emission test patterns
 - [Guardrails Tests](references/guardrails-tests.md) - Validation test patterns
 - [Pipeline Tests](references/pipeline-tests.md) - PIT and quality test patterns

@@ -117,6 +117,9 @@ class StatusStore:
 
         Args:
             dataset_id: Dataset instance resource ID
+
+        Note:
+            Uses flush() instead of commit() to allow caller to manage transactions.
         """
 
         status = await self._get_or_create(dataset_id)
@@ -124,7 +127,7 @@ class StatusStore:
         status.last_pipeline_status = "running"
         status.error_message = None
         status.updated_at = datetime.now(UTC)
-        await self._session.commit()
+        await self._session.flush()
 
     async def mark_run_success(
         self,
@@ -141,6 +144,9 @@ class StatusStore:
             last_data_date: Latest date in the dataset
             rows_processed: Number of rows processed in this run
             source_delay_detected: Whether source data delay was detected
+
+        Note:
+            Uses flush() instead of commit() to allow caller to manage transactions.
         """
         status = await self._get_or_create(dataset_id)
         status.last_pipeline_status = "success"
@@ -149,7 +155,7 @@ class StatusStore:
         status.source_delay_detected = source_delay_detected
         status.error_message = None
         status.updated_at = datetime.now(UTC)
-        await self._session.commit()
+        await self._session.flush()
 
     async def mark_run_error(
         self,
@@ -161,24 +167,30 @@ class StatusStore:
         Args:
             dataset_id: Dataset instance resource ID
             error_message: Error description
+
+        Note:
+            Uses flush() instead of commit() to allow caller to manage transactions.
         """
         status = await self._get_or_create(dataset_id)
         status.last_pipeline_status = "error"
         status.error_message = error_message
         status.updated_at = datetime.now(UTC)
-        await self._session.commit()
+        await self._session.flush()
 
     async def mark_run_empty(self, dataset_id: UUID) -> None:
         """Mark pipeline run as completed with no new data.
 
         Args:
             dataset_id: Dataset instance resource ID
+
+        Note:
+            Uses flush() instead of commit() to allow caller to manage transactions.
         """
         status = await self._get_or_create(dataset_id)
         status.last_pipeline_status = "empty"
         status.error_message = None
         status.updated_at = datetime.now(UTC)
-        await self._session.commit()
+        await self._session.flush()
 
     async def mark_source_check(
         self,
@@ -190,12 +202,15 @@ class StatusStore:
         Args:
             dataset_id: Dataset instance resource ID
             delay_detected: Whether source data is delayed
+
+        Note:
+            Uses flush() instead of commit() to allow caller to manage transactions.
         """
         status = await self._get_or_create(dataset_id)
         status.last_source_check = datetime.now(UTC)
         status.source_delay_detected = delay_detected
         status.updated_at = datetime.now(UTC)
-        await self._session.commit()
+        await self._session.flush()
 
     async def get_stale_datasets(
         self,
@@ -258,7 +273,7 @@ class StatusStore:
         """
         from sqlalchemy import select
 
-        from libs.db.models import Resource
+        from libs.db.models.resource import Resource
         from libs.db.models.quant import DatasetStatus
 
         stmt = select(DatasetStatus).where(DatasetStatus.dataset_id == dataset_id)

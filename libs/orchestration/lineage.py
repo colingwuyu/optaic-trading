@@ -330,7 +330,7 @@ class LineageResolver:
                 affected.append(downstream_id)
 
         if affected:
-            await session.commit()
+            await session.flush()
 
         return affected
 
@@ -407,7 +407,7 @@ class LineageResolver:
         Returns:
             Dict with nodes and edges for visualization
         """
-        from libs.db.models import Resource
+        from libs.db.models.resource import Resource
 
         nodes: dict[str, dict] = {}
         edges: list[dict] = []
@@ -476,3 +476,242 @@ class LineageResolver:
             "edges": edges,
             "center_id": str(resource_id),
         }
+
+    async def build_dag_for_instance(
+        self,
+        session: "AsyncSession",
+        instance_id: UUID,
+        tenant_id: UUID,
+    ) -> "LineageDAG":
+        """Build dependency DAG when a flow resource is created.
+
+        Parses the instance configuration to extract upstream dependencies.
+        For DatasetInstances, this looks at the pipeline config.
+        For ExperimentInstances, this looks at input_datasets_json.
+
+        Args:
+            session: Database session
+            instance_id: Instance resource ID
+            tenant_id: Tenant ID
+
+        Returns:
+            LineageDAG with upstream_ids, ready for storage and subscription creation
+        """
+        from libs.db.models.quant import (
+            DatasetInstance,
+            ExperimentInstance,
+            PipelineInstance,
+        )
+
+        upstream_ids: list[UUID] = []
+
+        # Check if it's a DatasetInstance
+        dataset_instance = await session.get(DatasetInstance, instance_id)
+        if dataset_instance:
+            # Get pipeline instance to extract dependencies from config
+            pipeline_instance = await session.get(
+                PipelineInstance, dataset_instance.pipeline_instance_id
+            )
+            if pipeline_instance:
+                upstream_ids = self._extract_upstream_from_pipeline_config(
+                    pipeline_instance.config_json
+                )
+
+        # Check if it's an ExperimentInstance
+        experiment_instance = await session.get(ExperimentInstance, instance_id)
+        if experiment_instance:
+            # input_datasets_json maps alias -> dataset_id
+            for dataset_id in experiment_instance.input_datasets_json.values():
+                if dataset_id:
+                    try:
+                        upstream_ids.append(UUID(str(dataset_id)))
+                    except (ValueError, TypeError):
+                        pass
+
+        return LineageDAG(
+            instance_id=instance_id,
+            tenant_id=tenant_id,
+            upstream_ids=upstream_ids,
+        )
+
+    def _extract_upstream_from_pipeline_config(
+        self,
+        config: dict,
+    ) -> list[UUID]:
+        """Extract upstream dataset IDs from pipeline configuration.
+
+        Supports multiple config patterns:
+        - input_datasets: list of dataset IDs
+        - upstream_datasets: list of dataset IDs
+        - expression_inputs: dict mapping alias to dataset ID
+        - sources: list of source configs with dataset_id field
+
+        Args:
+            config: Pipeline configuration dict
+
+        Returns:
+            List of upstream dataset UUIDs
+        """
+        upstream_ids: list[UUID] = []
+
+        # Pattern 1: input_datasets list
+        if "input_datasets" in config:
+            for dataset_id in config["input_datasets"]:
+                try:
+                    upstream_ids.append(UUID(str(dataset_id)))
+                except (ValueError, TypeError):
+                    pass
+
+        # Pattern 2: upstream_datasets list
+        if "upstream_datasets" in config:
+            for dataset_id in config["upstream_datasets"]:
+                try:
+                    upstream_ids.append(UUID(str(dataset_id)))
+                except (ValueError, TypeError):
+                    pass
+
+        # Pattern 3: expression_inputs dict (alias -> dataset_id)
+        if "expression_inputs" in config:
+            for dataset_id in config["expression_inputs"].values():
+                try:
+                    upstream_ids.append(UUID(str(dataset_id)))
+                except (ValueError, TypeError):
+                    pass
+
+        # Pattern 4: sources list with dataset_id
+        if "sources" in config:
+            for source in config["sources"]:
+                if isinstance(source, dict) and "dataset_id" in source:
+                    try:
+                        upstream_ids.append(UUID(str(source["dataset_id"])))
+                    except (ValueError, TypeError):
+                        pass
+
+        return upstream_ids
+
+    async def create_lineage_and_subscriptions(
+        self,
+        session: "AsyncSession",
+        dag: "LineageDAG",
+    ) -> None:
+        """Create lineage records and subscriptions for upstream dependencies.
+
+        This should be called when a flow resource is created. It:
+        1. Creates DatasetLineage records for each upstream dependency
+        2. Creates Subscription records so downstream gets notified on completion
+
+        Args:
+            session: Database session
+            dag: LineageDAG from build_dag_for_instance()
+        """
+        from libs.db.models.quant import DatasetLineage
+        from libs.db.models.subscription import Subscription
+
+        for upstream_id in dag.upstream_ids:
+            # Create lineage edge
+            lineage = DatasetLineage(
+                tenant_id=dag.tenant_id,
+                upstream_resource_id=upstream_id,
+                downstream_resource_id=dag.instance_id,
+                edge_kind="data_dependency",
+            )
+            session.add(lineage)
+
+            # Create subscription for completion events
+            # The downstream instance "subscribes" to the upstream's completion
+            subscription = Subscription(
+                tenant_id=dag.tenant_id,
+                principal_id=dag.instance_id,  # Using instance_id as principal for resource-level subscriptions
+                resource_id=upstream_id,
+                scope="completion",  # Subscribe to completion events
+            )
+            session.add(subscription)
+
+    async def update_upstream_status(
+        self,
+        session: "AsyncSession",
+        downstream_id: UUID,
+        upstream_id: UUID,
+        status: str,
+    ) -> bool:
+        """Update the status of an upstream dependency.
+
+        Called by the observer when an upstream completes or fails.
+
+        Args:
+            session: Database session
+            downstream_id: Downstream instance ID
+            upstream_id: Upstream instance ID that changed
+            status: New status ("ready", "stale", "running", "error")
+
+        Returns:
+            True if all upstreams are now ready
+        """
+        from libs.db.models.quant import DatasetInstance
+
+        instance = await session.get(DatasetInstance, downstream_id)
+        if not instance:
+            return False
+
+        # Update upstream status
+        upstream_status = instance.upstream_status or {}
+        upstream_status[str(upstream_id)] = status
+        instance.upstream_status = upstream_status
+
+        # Check if all upstreams are ready
+        upstream_ids = instance.upstream_resource_ids or []
+        all_ready = all(
+            upstream_status.get(str(uid)) == "ready" for uid in upstream_ids
+        )
+
+        return all_ready
+
+    async def check_all_upstreams_ready(
+        self,
+        session: "AsyncSession",
+        instance_id: UUID,
+    ) -> bool:
+        """Check if all upstream dependencies are ready.
+
+        This reads from the cached upstream_status on the instance,
+        not from the lineage table - making execution checks fast.
+
+        Args:
+            session: Database session
+            instance_id: Instance ID to check
+
+        Returns:
+            True if all upstreams are ready
+        """
+        from libs.db.models.quant import DatasetInstance
+
+        instance = await session.get(DatasetInstance, instance_id)
+        if not instance:
+            return False
+
+        upstream_ids = instance.upstream_resource_ids or []
+        if not upstream_ids:
+            return True  # No dependencies means always ready
+
+        upstream_status = instance.upstream_status or {}
+        return all(upstream_status.get(str(uid)) == "ready" for uid in upstream_ids)
+
+
+@dataclass
+class LineageDAG:
+    """Represents a lineage DAG for an instance.
+
+    Built at instance creation time and used to:
+    - Store upstream_ids on the instance
+    - Create DatasetLineage records
+    - Create Subscription records for pub/sub
+    """
+
+    instance_id: UUID
+    tenant_id: UUID
+    upstream_ids: list[UUID] = field(default_factory=list)
+
+    @property
+    def has_dependencies(self) -> bool:
+        """Check if this DAG has any upstream dependencies."""
+        return len(self.upstream_ids) > 0

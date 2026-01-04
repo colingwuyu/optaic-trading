@@ -16,6 +16,15 @@ from uuid import UUID
 
 
 @dataclass
+class DeploymentResult:
+    """Result of creating a deployment (Flow Execution Resource)."""
+
+    deployment_id: str
+    orchestrator_kind: str
+    deployment_meta: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class SubmitResult:
     """Result of submitting a run to an orchestrator."""
 
@@ -144,3 +153,86 @@ class OrchestratorAdapter(ABC):
             Log output as a string (may be truncated for large logs)
         """
         pass
+
+    # =========================================================================
+    # Deployment Management (Flow Execution Resources)
+    # =========================================================================
+
+    async def create_deployment(
+        self,
+        instance_id: UUID,
+        flow_name: str,
+        flow_template: str,
+        parameters: dict[str, Any],
+        schedule: Optional[dict[str, Any]] = None,
+        tags: Optional[dict[str, str]] = None,
+    ) -> DeploymentResult:
+        """Create a deployment (Flow Execution Resource) for an Instance.
+
+        This creates a static Prefect deployment that can be triggered to create
+        flow runs. The deployment is paired with the Instance and represents
+        the execution capability.
+
+        Args:
+            instance_id: The Instance resource ID (for correlation)
+            flow_name: Human-readable name for the deployment
+            flow_template: Flow template to use (e.g., "dataset_refresh")
+            parameters: Default parameters for the deployment
+            schedule: Optional schedule configuration (cron, interval, etc.)
+            tags: Correlation tags
+
+        Returns:
+            DeploymentResult with the deployment ID
+
+        Note: Default implementation returns a fake deployment for non-Prefect backends.
+        """
+        # Default: Return a fake deployment ID for local/test environments
+        return DeploymentResult(
+            deployment_id=f"local-{instance_id}",
+            orchestrator_kind=self.kind,
+            deployment_meta={"flow_template": flow_template},
+        )
+
+    async def delete_deployment(self, deployment_id: str) -> bool:
+        """Delete a deployment (cleanup when Instance is deleted).
+
+        Args:
+            deployment_id: The deployment ID to delete
+
+        Returns:
+            True if deletion was successful, False otherwise
+
+        Note: Default implementation is a no-op for non-Prefect backends.
+        """
+        return True
+
+    async def trigger_deployment(
+        self,
+        deployment_id: str,
+        run_id: UUID,
+        parameters: Optional[dict[str, Any]] = None,
+        tags: Optional[dict[str, str]] = None,
+    ) -> SubmitResult:
+        """Trigger a run on an existing deployment.
+
+        This creates a new flow run under the existing deployment, which is
+        the preferred way to execute Instances that have deployments.
+
+        Args:
+            deployment_id: The deployment to trigger
+            run_id: The Run resource ID (for correlation)
+            parameters: Override parameters for this run
+            tags: Additional tags for this run
+
+        Returns:
+            SubmitResult with the flow run ID
+
+        Note: Default implementation creates a local run for non-Prefect backends.
+        """
+        # Default: Use submit_run with an empty flow definition
+        return await self.submit_run(
+            run_id=run_id,
+            flow_definition={"nodes": [], "edges": []},
+            config=parameters or {},
+            tags=tags or {},
+        )

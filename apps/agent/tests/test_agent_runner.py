@@ -51,7 +51,7 @@ async def test_agent_responds_to_mentions_with_audit_activity():
             },
         )
         assert channel_response.status_code == 201
-        channel_id = channel_response.json()["resource_id"]
+        channel_id = channel_response.json()["id"]
 
         grant_response = await client.post(
             "/rbac/grants",

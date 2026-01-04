@@ -399,8 +399,9 @@ class ChannelCreate(BaseModel):
 class ChannelOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    resource_id: UUID
+    id: UUID
     tenant_id: UUID
+    name: str
     channel_kind: str
     topic: Optional[str] = None
     settings: Dict[str, Any]
@@ -618,6 +619,51 @@ class DatasetStatusOut(BaseModel):
     row_count: Optional[int] = None
 
 
+# --- Lineage Schemas ---
+
+
+class LineageNodeOut(BaseModel):
+    """Node in a lineage DAG."""
+
+    id: str
+    name: str
+    type: str  # DatasetInstance, ExperimentInstance, etc.
+    status: Optional[str] = None  # ready, stale, running, error, unknown
+    direction: str  # upstream, downstream, center
+
+
+class LineageEdgeOut(BaseModel):
+    """Edge in a lineage DAG."""
+
+    source: str  # upstream resource ID
+    target: str  # downstream resource ID
+    kind: str = "data_dependency"  # data_dependency, schema_dependency, etc.
+
+
+class LineageFreshnessOut(BaseModel):
+    """Freshness status for lineage check."""
+
+    all_ready: bool
+    blockers: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class LineageDAGOut(BaseModel):
+    """Lineage DAG response for visualization.
+
+    This response is designed to be directly usable by
+    graph visualization libraries like D3.js, Dagre, or Cytoscape.
+    """
+
+    nodes: List[LineageNodeOut]
+    edges: List[LineageEdgeOut]
+    center_id: str
+    execution_order: List[List[str]] = Field(
+        default_factory=list,
+        description="Batches of resource IDs in topological order",
+    )
+    freshness: Optional[LineageFreshnessOut] = None
+
+
 # --- Signal Schemas ---
 
 
@@ -761,3 +807,186 @@ class MacroSaveOut(BaseModel):
     expression: str
     input_aliases: List[str]
     status: str
+
+
+# --- Run Resource Schemas ---
+
+
+class PipelineRunSubmitRequest(BaseModel):
+    """Submit a pipeline run request."""
+
+    dataset_id: UUID = Field(
+        description="DatasetInstance to refresh",
+        examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"],
+    )
+    mode: str = Field(
+        default="incremental",
+        examples=["incremental", "overwrite"],
+        description="Execution mode - incremental or overwrite",
+    )
+    force: bool = Field(
+        default=False,
+        description="Force run even if upstreams are stale/error",
+    )
+
+
+class PipelineRunSubmitOut(BaseModel):
+    """Pipeline run submission response."""
+
+    id: UUID
+    dataset_id: UUID
+    orchestrator_run_id: Optional[str] = None
+    orchestrator_kind: Optional[str] = None
+    mode: str
+    status: str
+    started_at: Optional[str] = None
+    upstream_warning: Optional[str] = None
+
+
+class PipelineRunStatusOut(BaseModel):
+    """Pipeline run status response."""
+
+    id: UUID
+    type: str = "PipelineRun"
+    name: Optional[str] = None
+    dataset_id: UUID
+    mode: str
+    status: str
+    orchestrator_kind: Optional[str] = None
+    orchestrator_run_id: Optional[str] = None
+    rows_processed: Optional[int] = None
+    start_data_date: Optional[str] = None
+    end_data_date: Optional[str] = None
+    error_summary: Optional[str] = None
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    created_at: str
+
+
+class ExperimentRunSubmitRequest(BaseModel):
+    """Submit an experiment preview request."""
+
+    experiment_id: UUID = Field(
+        description="ExperimentInstance to run",
+        examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"],
+    )
+    start_date: Optional[str] = Field(
+        default=None,
+        examples=["2024-01-01"],
+        description="Start date filter",
+    )
+    end_date: Optional[str] = Field(
+        default=None,
+        examples=["2024-12-31"],
+        description="End date filter",
+    )
+    as_of_date: Optional[str] = Field(
+        default=None,
+        examples=["2024-06-15"],
+        description="Point-in-time date for PIT filtering",
+    )
+    limit: int = Field(
+        default=100,
+        ge=1,
+        le=1000,
+        description="Maximum rows to return in preview",
+    )
+
+
+class ExperimentRunSubmitOut(BaseModel):
+    """Experiment run submission response."""
+
+    id: UUID
+    experiment_id: UUID
+    expression: str
+    orchestrator_run_id: Optional[str] = None
+    orchestrator_kind: Optional[str] = None
+    status: str
+    started_at: Optional[str] = None
+
+
+class ExperimentRunStatusOut(BaseModel):
+    """Experiment run status response."""
+
+    id: UUID
+    type: str = "ExperimentRun"
+    name: Optional[str] = None
+    experiment_id: UUID
+    expression: str
+    status: str
+    orchestrator_kind: Optional[str] = None
+    orchestrator_run_id: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    as_of_date: Optional[str] = None
+    row_count: Optional[int] = None
+    result_columns: Optional[List[str]] = None
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    created_at: str
+
+
+class ExperimentRunResultsOut(BaseModel):
+    """Experiment run results response."""
+
+    id: UUID
+    status: str
+    expression: Optional[str] = None
+    columns: Optional[List[str]] = None
+    row_count: Optional[int] = None
+    preview_data: Optional[List[Dict[str, Any]]] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    as_of_date: Optional[str] = None
+    message: Optional[str] = None
+
+
+# --- Schedule Schemas ---
+
+
+class ScheduleConfigIn(BaseModel):
+    """Schedule configuration input.
+
+    Supports:
+    - cron: Standard cron expression (e.g., "0 6 * * *" for 6am daily)
+    - interval_seconds: Fixed interval in seconds
+    - active: Whether schedule is enabled
+
+    Either cron OR interval_seconds should be provided, not both.
+    """
+
+    cron: Optional[str] = Field(
+        default=None,
+        examples=["0 6 * * *", "0 0 * * MON"],
+        description="Cron expression (e.g., '0 6 * * *' for 6am daily)",
+    )
+    interval_seconds: Optional[int] = Field(
+        default=None,
+        ge=60,
+        examples=[3600, 86400],
+        description="Interval in seconds (minimum 60)",
+    )
+    active: bool = Field(
+        default=True,
+        description="Whether the schedule is enabled",
+    )
+
+
+class ScheduleConfigOut(BaseModel):
+    """Schedule configuration output."""
+
+    cron: Optional[str] = None
+    interval_seconds: Optional[int] = None
+    active: bool = True
+    last_scheduled_at: Optional[str] = None
+    next_scheduled_at: Optional[str] = None
+
+
+class DatasetScheduleOut(BaseModel):
+    """Dataset schedule response."""
+
+    id: UUID
+    name: str
+    schedule: Optional[ScheduleConfigOut] = None
+    deployment_id: Optional[str] = None
+    orchestrator_kind: Optional[str] = None

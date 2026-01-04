@@ -26,15 +26,19 @@ Activity Actions:
 """
 
 from apps.api.services.dataset_service import DatasetService
+from apps.api.services.experiment_run_service import ExperimentRunService
 from apps.api.services.experiment_service import ExperimentService
 from apps.api.services.op_service import OpService
+from apps.api.services.pipeline_run_service import PipelineRunService
 from apps.api.services.pipeline_service import PipelineService
 from apps.api.services.signal_service import SignalService
 
 __all__ = [
     "DatasetService",
+    "ExperimentRunService",
     "ExperimentService",
     "OpService",
+    "PipelineRunService",
     "PipelineService",
     "SignalService",
 ]

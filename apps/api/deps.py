@@ -106,3 +106,23 @@ def get_guardrails_engine() -> "GuardrailsEngine":  # noqa: F821
     from optaic.guardrails.runtime.engine import GuardrailsEngine
 
     return GuardrailsEngine()
+
+
+def get_orchestrator() -> "OrchestratorAdapter":  # noqa: F821
+    """Get the orchestrator adapter.
+
+    Returns LocalOrchestrator by default. In production with Prefect,
+    this would return PrefectOrchestrator configured via settings.
+    """
+    from libs.orchestration import LocalOrchestrator
+
+    return LocalOrchestrator()
+
+
+async def get_status_store(
+    db: AsyncSession = Depends(get_db),
+) -> "StatusStore":  # noqa: F821
+    """Get the StatusStore instance."""
+    from libs.orchestration import StatusStore
+
+    return StatusStore(db)

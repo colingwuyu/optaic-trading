@@ -39,7 +39,7 @@ async def test_chat_actions_write_activity_and_outbox():
             },
         )
         assert channel_response.status_code == 201
-        channel_id = channel_response.json()["resource_id"]
+        channel_id = channel_response.json()["id"]
 
         message_response = await client.post(
             f"/chat/channels/{channel_id}/messages",
@@ -162,7 +162,7 @@ async def test_chat_permissions_operator_can_post_edit_delete():
             },
         )
         assert channel_response.status_code == 201
-        channel_id = channel_response.json()["resource_id"]
+        channel_id = channel_response.json()["id"]
 
         post_response = await client.post(
             f"/chat/channels/{channel_id}/messages",
@@ -236,7 +236,7 @@ async def test_chat_permissions_denied_for_viewer_role():
             },
         )
         assert channel_response.status_code == 201
-        channel_id = channel_response.json()["resource_id"]
+        channel_id = channel_response.json()["id"]
 
         post_response = await client.post(
             f"/chat/channels/{channel_id}/messages",

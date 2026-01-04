@@ -213,14 +213,16 @@ class RunExecutionService:
             "started_at": datetime.now(UTC).isoformat(),
             "status": "running",
         }
-        await session.commit()
+        await session.flush()
 
         # 9. Emit activity (async, non-blocking)
         await self._emit_activity(
             session=session,
             actor=actor,
+            tenant_id=actor.tenant_id,
             action="pipeline.run_started",
             resource_id=run_id,
+            resource_type="PipelineRun",
             payload={
                 "dataset_id": str(dataset_id),
                 "mode": mode,
@@ -360,14 +362,16 @@ class RunExecutionService:
             "started_at": datetime.now(UTC).isoformat(),
             "status": "running",
         }
-        await session.commit()
+        await session.flush()
 
         # 7. Emit activity
         await self._emit_activity(
             session=session,
             actor=actor,
+            tenant_id=actor.tenant_id,
             action="experiment.run_started",
             resource_id=run_id,
+            resource_type="ExperimentRun",
             payload={
                 "experiment_id": str(experiment_id),
                 "expression": experiment.expression_text,
@@ -404,15 +408,15 @@ class RunExecutionService:
         if not run:
             raise ValueError(f"Run {run_id} not found")
 
-        metadata = run.metadata_json or {}
-        current_status = metadata.get("status", "unknown")
+        current_metadata = run.metadata_json or {}
+        current_status = current_metadata.get("status", "unknown")
 
         # Skip if already in terminal state
         if current_status in ("completed", "failed", "cancelled"):
             return self._run_to_dict(run)
 
         # Get orchestrator run ID
-        orchestrator_run_id = metadata.get("orchestrator_run_id")
+        orchestrator_run_id = current_metadata.get("orchestrator_run_id")
         if not orchestrator_run_id:
             raise ValueError(f"Run {run_id} has no orchestrator_run_id")
 
@@ -421,15 +425,17 @@ class RunExecutionService:
 
         # Update if status changed
         if status.status != current_status:
-            metadata["status"] = status.status
-            metadata["finished_at"] = (
+            # Create a new dict to ensure SQLAlchemy detects the change
+            new_metadata = dict(current_metadata)
+            new_metadata["status"] = status.status
+            new_metadata["finished_at"] = (
                 status.finished_at.isoformat() if status.finished_at else None
             )
-            metadata["error_message"] = status.error_message
-            metadata["metrics"] = status.metrics
+            new_metadata["error_message"] = status.error_message
+            new_metadata["metrics"] = status.metrics
 
-            run.metadata_json = metadata
-            await session.commit()
+            run.metadata_json = new_metadata
+            await session.flush()
 
             # Handle completion
             if status.status == "completed":
@@ -461,8 +467,8 @@ class RunExecutionService:
         if not run:
             raise ValueError(f"Run {run_id} not found")
 
-        metadata = run.metadata_json or {}
-        orchestrator_run_id = metadata.get("orchestrator_run_id")
+        current_metadata = run.metadata_json or {}
+        orchestrator_run_id = current_metadata.get("orchestrator_run_id")
 
         if not orchestrator_run_id:
             raise ValueError(f"Run {run_id} has no orchestrator_run_id")
@@ -471,17 +477,21 @@ class RunExecutionService:
         success = await self._orchestrator.cancel_run(orchestrator_run_id)
 
         if success:
-            metadata["status"] = "cancelled"
-            metadata["finished_at"] = datetime.now(UTC).isoformat()
-            run.metadata_json = metadata
-            await session.commit()
+            # Create a new dict to ensure SQLAlchemy detects the change
+            new_metadata = dict(current_metadata)
+            new_metadata["status"] = "cancelled"
+            new_metadata["finished_at"] = datetime.now(UTC).isoformat()
+            run.metadata_json = new_metadata
+            await session.flush()
 
             # Emit activity
             await self._emit_activity(
                 session=session,
                 actor=actor,
+                tenant_id=run.tenant_id,
                 action=f"{run.type.lower()}.run_cancelled",
                 resource_id=run_id,
+                resource_type=run.type,
                 payload={"orchestrator_run_id": orchestrator_run_id},
             )
 
@@ -539,14 +549,16 @@ class RunExecutionService:
                     rows_processed=metrics.get("rows_processed"),
                 )
 
-        await session.commit()
+        await session.flush()
 
         # Emit completion activity
         await self._emit_activity(
             session=session,
             actor=None,  # System event
+            tenant_id=run.tenant_id,
             action=f"{run.type.lower()}.run_completed",
             resource_id=run.id,
+            resource_type=run.type,
             payload={"metrics": status.metrics},
         )
 
@@ -564,14 +576,16 @@ class RunExecutionService:
                 error_message=status.error_message or "Unknown error",
             )
 
-        await session.commit()
+        await session.flush()
 
         # Emit failure activity
         await self._emit_activity(
             session=session,
             actor=None,  # System event
+            tenant_id=run.tenant_id,
             action=f"{run.type.lower()}.run_failed",
             resource_id=run.id,
+            resource_type=run.type,
             payload={"error": status.error_message},
         )
 
@@ -579,17 +593,30 @@ class RunExecutionService:
         self,
         session: "AsyncSession",
         actor: Optional["ActorContext"],
+        tenant_id: UUID,
         action: str,
         resource_id: UUID,
+        resource_type: str,
         payload: dict[str, Any],
     ) -> None:
-        """Emit an activity event (via outbox pattern)."""
+        """Emit an activity event (via outbox pattern).
+
+        Args:
+            session: Database session
+            actor: Actor context (None for system actions)
+            tenant_id: Tenant ID (required for outbox)
+            action: Action name (e.g., "pipeline.run_started")
+            resource_id: Resource ID the activity is about
+            resource_type: Type of the resource (e.g., "PipelineRun")
+            payload: Activity payload data
+        """
         from libs.db.models.activity import Activity, Outbox
 
         activity = Activity(
             id=uuid4(),
-            tenant_id=actor.tenant_id if actor else None,
+            tenant_id=tenant_id,
             resource_id=resource_id,
+            resource_type=resource_type,
             action=action,
             actor_principal_id=actor.id if actor else None,
             payload=payload,
@@ -599,6 +626,9 @@ class RunExecutionService:
         # Queue for async processing
         outbox = Outbox(
             id=uuid4(),
+            tenant_id=tenant_id,
+            topic=f"activities.{resource_type.lower()}",
+            key=str(resource_id),
             payload={
                 "activity_id": str(activity.id),
                 "action": action,
@@ -607,6 +637,7 @@ class RunExecutionService:
             },
         )
         session.add(outbox)
+        await session.flush()
 
     async def _validate_at_gate(
         self,

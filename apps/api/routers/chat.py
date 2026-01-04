@@ -97,7 +97,7 @@ async def create_channel(
 
     await reset_session(db)
 
-    async def domain_fn(session: AsyncSession) -> Channel:
+    async def domain_fn(session: AsyncSession) -> tuple[Channel, Resource]:
         resource = Resource(
             id=channel_id,
             tenant_id=actor.tenant_id,
@@ -119,7 +119,7 @@ async def create_channel(
         )
         session.add(channel)
         await session.flush()
-        return channel
+        return channel, resource
 
     envelope = ActivityEnvelope(
         tenant_id=actor.tenant_id,
@@ -133,8 +133,17 @@ async def create_channel(
             "channel_kind": payload.channel_kind,
         },
     )
-    channel, _activity = await tx_activity(db, envelope, domain_fn)
-    return ChannelOut.model_validate(channel)
+    result, _activity = await tx_activity(db, envelope, domain_fn)
+    channel, resource = result
+    return ChannelOut(
+        id=resource.id,
+        tenant_id=channel.tenant_id,
+        name=resource.name,
+        channel_kind=channel.channel_kind,
+        topic=channel.topic,
+        settings=channel.settings,
+        created_at=channel.created_at,
+    )
 
 
 @router.post("/attachments/upload-init", response_model=AttachmentUploadInitOut)

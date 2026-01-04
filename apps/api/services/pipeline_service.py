@@ -89,7 +89,7 @@ class PipelineService:
         resource_id = uuid4()
 
         async def domain_fn(sess: AsyncSession) -> Resource:
-            # Create Resource
+            # Create Resource first
             resource = Resource(
                 id=resource_id,
                 tenant_id=actor.tenant_id,
@@ -103,8 +103,10 @@ class PipelineService:
                 metadata_json={"category": category},
             )
             sess.add(resource)
+            # Flush Resource first to satisfy FK constraint on PipelineDefinition
+            await sess.flush()
 
-            # Create Extension
+            # Create Extension (references resource_id FK)
             definition = PipelineDefinition(
                 resource_id=resource_id,
                 tenant_id=actor.tenant_id,
@@ -235,7 +237,7 @@ class PipelineService:
         resource_id = uuid4()
 
         async def domain_fn(sess: AsyncSession) -> Resource:
-            # Create Resource
+            # Create Resource first
             resource = Resource(
                 id=resource_id,
                 tenant_id=actor.tenant_id,
@@ -249,8 +251,10 @@ class PipelineService:
                 metadata_json={},
             )
             sess.add(resource)
+            # Flush Resource first to satisfy FK constraint on PipelineInstance
+            await sess.flush()
 
-            # Create Extension
+            # Create Extension (references resource_id FK)
             instance = PipelineInstance(
                 resource_id=resource_id,
                 tenant_id=actor.tenant_id,
