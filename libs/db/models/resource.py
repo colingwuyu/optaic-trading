@@ -34,6 +34,9 @@ class Resource(Base):
         String(50), default="active"
     )  # active|archived|deleted
     metadata_json: Mapped[dict] = mapped_column("metadata", JSONType, default=dict)
+    # UUID reference to artifact folder: {DATA_DIR}/artifacts/{artifact_ref}/
+    # Set when resource has associated files (definitions, datasets, models, etc.)
+    artifact_ref: Mapped[Optional[UUID]] = mapped_column(nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow
     )
@@ -49,6 +52,16 @@ class Resource(Base):
 
 
 class ResourceEdge(Base):
+    """Edges between resources for relationships and lineage tracking.
+
+    Edge types for governance lineage:
+    - copy_of: Resource references same artifact (no file copy)
+    - branch_of: Resource is a branch with copied artifact files
+    - transferred_from: Ownership was transferred (same artifact)
+    - promoted_from: Promoted to team space (new artifact copy)
+    - merged_from: Branch merged back to ancestor
+    """
+
     __tablename__ = "resource_edges"
 
     tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), primary_key=True)
@@ -60,7 +73,11 @@ class ResourceEdge(Base):
     )
     edge_type: Mapped[str] = mapped_column(
         String(100), primary_key=True
-    )  # contains|composes|references|...
+    )  # contains|composes|references|branch_of|promoted_from|merged_from|...
+    # Who created this edge (for lineage audit trail)
+    created_by_principal_id: Mapped[Optional[UUID]] = mapped_column(
+        ForeignKey("principals.id"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow
     )

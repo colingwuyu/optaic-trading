@@ -41,11 +41,16 @@ from libs.db.models.quant import (  # noqa: E402
     OpDefinition,
 )
 
-# System tenant and space for built-in definitions
-# In production, these would be fetched from config or created on first boot
-SYSTEM_TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
-SYSTEM_SPACE_ID = UUID("00000000-0000-0000-0000-000000000002")
-SYSTEM_PRINCIPAL_ID = UUID("00000000-0000-0000-0000-000000000003")
+# Import well-known system IDs from bootstrap module
+# These are created by bootstrap_system() on first startup
+from libs.core.bootstrap import (  # noqa: E402
+    SYSTEM_TENANT_ID,
+    SYSTEM_PRINCIPAL_ID,
+    SYSTEM_PROJECT_ID,
+)
+
+# Parent for all definitions is the System Project (inside Official subspace)
+SYSTEM_DEFINITIONS_PARENT_ID = SYSTEM_PROJECT_ID
 
 # =============================================================================
 # Built-in Definitions
@@ -59,7 +64,35 @@ BUILT_IN_PIPELINES: list[dict[str, Any]] = [
         "code_ref": "ExpressionPipeline",
         "category": "expression",
         "description": "Execute expressions on existing datasets",
-        "interface_spec": "libs.data.pipelines.base.BasePipeline",
+        "interface_spec": "libs.data.pipelines.base.DataPipeline",
+    },
+    {
+        "name": "FredPipeline",
+        "code_ref": "FredPipeline",
+        "category": "etl",
+        "description": "Fetch economic data from FRED API",
+        "interface_spec": "libs.data.pipelines.base.DataPipeline",
+    },
+    {
+        "name": "BloombergPipeline",
+        "code_ref": "BloombergPipeline",
+        "category": "etl",
+        "description": "Fetch market data from Bloomberg terminal",
+        "interface_spec": "libs.data.pipelines.base.DataPipeline",
+    },
+    {
+        "name": "OHLCVBloombergPipeline",
+        "code_ref": "OHLCVBloombergPipeline",
+        "category": "etl",
+        "description": "Fetch OHLCV data from Bloomberg with preset fields",
+        "interface_spec": "libs.data.pipelines.base.DataPipeline",
+    },
+    {
+        "name": "SQLiteUpdatePipeline",
+        "code_ref": "SQLiteUpdatePipeline",
+        "category": "etl",
+        "description": "Update SQLite database from source files",
+        "interface_spec": "libs.data.pipelines.base.DataPipeline",
     },
 ]
 
@@ -348,7 +381,7 @@ async def seed_pipeline_definitions(session: AsyncSession) -> int:
             id=resource_id,
             tenant_id=SYSTEM_TENANT_ID,
             type="PipelineDef",
-            parent_id=SYSTEM_SPACE_ID,
+            parent_id=SYSTEM_DEFINITIONS_PARENT_ID,
             owner_principal_id=SYSTEM_PRINCIPAL_ID,
             name=pipeline["name"],
             space_kind="system",
@@ -357,6 +390,7 @@ async def seed_pipeline_definitions(session: AsyncSession) -> int:
             metadata_json={"description": pipeline.get("description", "")},
         )
         session.add(resource)
+        await session.flush()  # Flush Resource before Definition (FK dependency)
 
         definition = PipelineDefinition(
             resource_id=resource_id,
@@ -392,7 +426,7 @@ async def seed_store_definitions(session: AsyncSession) -> int:
             id=resource_id,
             tenant_id=SYSTEM_TENANT_ID,
             type="StoreDef",
-            parent_id=SYSTEM_SPACE_ID,
+            parent_id=SYSTEM_DEFINITIONS_PARENT_ID,
             owner_principal_id=SYSTEM_PRINCIPAL_ID,
             name=store["name"],
             space_kind="system",
@@ -401,6 +435,7 @@ async def seed_store_definitions(session: AsyncSession) -> int:
             metadata_json={"description": store.get("description", "")},
         )
         session.add(resource)
+        await session.flush()  # Flush Resource before Definition (FK dependency)
 
         definition = StoreDefinition(
             resource_id=resource_id,
@@ -433,7 +468,7 @@ async def seed_accessor_definitions(session: AsyncSession) -> int:
             id=resource_id,
             tenant_id=SYSTEM_TENANT_ID,
             type="AccessorDef",
-            parent_id=SYSTEM_SPACE_ID,
+            parent_id=SYSTEM_DEFINITIONS_PARENT_ID,
             owner_principal_id=SYSTEM_PRINCIPAL_ID,
             name=accessor["name"],
             space_kind="system",
@@ -442,6 +477,7 @@ async def seed_accessor_definitions(session: AsyncSession) -> int:
             metadata_json={"description": accessor.get("description", "")},
         )
         session.add(resource)
+        await session.flush()  # Flush Resource before Definition (FK dependency)
 
         definition = AccessorDefinition(
             resource_id=resource_id,
@@ -474,7 +510,7 @@ async def seed_op_definitions(session: AsyncSession) -> int:
             id=resource_id,
             tenant_id=SYSTEM_TENANT_ID,
             type="OpDef",
-            parent_id=SYSTEM_SPACE_ID,
+            parent_id=SYSTEM_DEFINITIONS_PARENT_ID,
             owner_principal_id=SYSTEM_PRINCIPAL_ID,
             name=op["name"],
             space_kind="system",
@@ -483,6 +519,7 @@ async def seed_op_definitions(session: AsyncSession) -> int:
             metadata_json={},
         )
         session.add(resource)
+        await session.flush()  # Flush Resource before Definition (FK dependency)
 
         definition = OpDefinition(
             resource_id=resource_id,
@@ -503,19 +540,29 @@ async def seed_op_definitions(session: AsyncSession) -> int:
 
 
 async def seed_all_definitions(session: AsyncSession) -> dict[str, int]:
-    """Seed all built-in definitions."""
+    """Seed all built-in definitions.
+
+    Note: Caller is responsible for committing the session.
+    This allows callers to batch multiple operations before committing.
+    """
     results = {
         "pipelines": await seed_pipeline_definitions(session),
         "stores": await seed_store_definitions(session),
         "accessors": await seed_accessor_definitions(session),
         "ops": await seed_op_definitions(session),
     }
-    await session.commit()
+    await session.flush()
     return results
 
 
 async def main() -> None:
-    """Run seeding."""
+    """Run seeding standalone.
+
+    When running as a script, this function handles:
+    1. Bootstrap (if needed)
+    2. Seeding definitions
+    3. Committing all changes
+    """
     import structlog
 
     structlog.configure(
@@ -528,7 +575,21 @@ async def main() -> None:
     logger.info("Starting definition seeding...")
 
     async with AsyncSessionLocal() as session:
+        # Bootstrap first (creates system tenant, space, project)
+        from libs.core.bootstrap import bootstrap_system
+
+        bootstrap_result = await bootstrap_system(session)
+        if bootstrap_result.created:
+            logger.info(
+                "System bootstrapped",
+                tenant_id=str(bootstrap_result.tenant_id),
+            )
+
+        # Seed definitions
         results = await seed_all_definitions(session)
+
+        # Commit all changes
+        await session.commit()
 
     logger.info(
         "Seeding complete",

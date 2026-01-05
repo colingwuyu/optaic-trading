@@ -164,3 +164,36 @@ async def list_tenants(
     )
     tenants = result.all()
     return [TenantOut(id=t.id, name=t.name, created_at=t.created_at) for t in tenants]
+
+
+@router.get("/{tenant_id}", response_model=TenantOut)
+async def get_tenant(
+    tenant_id: UUID,
+    actor: ActorContext = Depends(get_actor),
+    db: AsyncSession = Depends(get_db),
+) -> TenantOut:
+    """Get details for a specific tenant."""
+    # Only allow fetching the actor's own tenant
+    if tenant_id != actor.tenant_id:
+        raise HTTPException(status_code=403, detail="Cannot access other tenants")
+
+    tenant = await db.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    # Find the root resource for this tenant
+    result = await db.scalars(
+        select(Resource).where(
+            Resource.tenant_id == tenant_id,
+            Resource.type == "TenantRoot",
+            Resource.parent_id.is_(None),
+        )
+    )
+    root_resource = result.first()
+
+    return TenantOut(
+        id=tenant.id,
+        name=tenant.name,
+        created_at=tenant.created_at,
+        root_resource_id=root_resource.id if root_resource else None,
+    )

@@ -37,20 +37,19 @@ class TestDatasetsClient:
             freshness_status="fresh",
         )
 
-        mock_httpx_client.request.assert_called_with(
-            "POST",
-            "/datasets",
-            headers={},
-            params=None,
-            json={
-                "name": name,
-                "parent_id": str(parent_id),
-                "pipeline_instance_id": str(pipeline_inst_id),
-                "store_instance_id": str(store_inst_id),
-                "accessor_instance_id": str(accessor_inst_id),
-                "freshness_status": "fresh",
-            },
-        )
+        # Verify the request was made correctly
+        call_args = mock_httpx_client.request.call_args
+        assert call_args[0][0] == "POST"
+        assert call_args[0][1] == "/datasets"
+        assert call_args[1]["headers"] == {}
+        assert "params" not in call_args[1]  # params=None is not passed
+        payload = call_args[1]["json"]
+        assert payload["name"] == name
+        assert payload["parent_id"] == str(parent_id)
+        assert payload["pipeline_instance_id"] == str(pipeline_inst_id)
+        assert payload["store_instance_id"] == str(store_inst_id)
+        assert payload["accessor_instance_id"] == str(accessor_inst_id)
+        assert payload["freshness_status"] == "fresh"
 
     @pytest.mark.asyncio
     async def test_preview_pit_date(self, platform_client, mock_httpx_client):
@@ -92,34 +91,40 @@ class TestSignalsClient:
             dataset_id=ds_id, name="AlphaSignal", min_value=-5.0
         )
 
-        mock_httpx_client.request.assert_called_with(
-            "POST",
-            "/signals",
-            headers={},
-            params=None,
-            json={
-                "dataset_id": str(ds_id),
-                "name": "AlphaSignal",
-                "min_value": -5.0,
-                "max_value": 1.0,
-                "allow_nan": False,
-                "neutral_value": 0.0,
-            },
-        )
+        # Verify the request was made correctly
+        call_args = mock_httpx_client.request.call_args
+        assert call_args[0][0] == "POST"
+        assert call_args[0][1] == "/signals"
+        assert call_args[1]["headers"] == {}
+        assert "params" not in call_args[1]  # params=None is not passed
+        payload = call_args[1]["json"]
+        assert payload["dataset_id"] == str(ds_id)
+        assert payload["name"] == "AlphaSignal"
+        assert payload["min_value"] == -5.0
+        assert payload["max_value"] == 1.0
+        assert payload["allow_nan"] is False
+        assert payload["neutral_value"] == 0.0
 
     @pytest.mark.asyncio
     async def test_validate_and_promote(self, platform_client, mock_httpx_client):
         sig_id = uuid4()
 
         await platform_client.signals.validate(sig_id)
-        mock_httpx_client.request.assert_called_with(
-            "POST", f"/signals/{sig_id}/validate", headers={}, params=None, json=None
-        )
+        call_args = mock_httpx_client.request.call_args
+        assert call_args[0][0] == "POST"
+        assert call_args[0][1] == f"/signals/{sig_id}/validate"
+        assert call_args[1]["headers"] == {}
+        # params=None and json=None are not passed when empty
+        assert "params" not in call_args[1]
+        assert "json" not in call_args[1]
 
         await platform_client.signals.promote(sig_id)
-        mock_httpx_client.request.assert_called_with(
-            "POST", f"/signals/{sig_id}/promote", headers={}, params=None, json=None
-        )
+        call_args = mock_httpx_client.request.call_args
+        assert call_args[0][0] == "POST"
+        assert call_args[0][1] == f"/signals/{sig_id}/promote"
+        assert call_args[1]["headers"] == {}
+        assert "params" not in call_args[1]
+        assert "json" not in call_args[1]
 
 
 class TestOpsClient:

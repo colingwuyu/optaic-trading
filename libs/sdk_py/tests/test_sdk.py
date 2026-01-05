@@ -347,6 +347,15 @@ class TestAllExports:
 
         expected = [
             "AsyncPlatformClient",
+            # System constants
+            "SYSTEM_TENANT_ID",
+            "SYSTEM_SPACE_ID",
+            "SYSTEM_PRINCIPAL_ID",
+            "SYSTEM_TENANT_ROOT_ID",
+            "SYSTEM_OFFICIAL_SUBSPACE_ID",
+            "SYSTEM_STAGING_SUBSPACE_ID",
+            "SYSTEM_PROJECT_ID",
+            # Quant domain clients
             "DatasetsClient",
             "ExperimentsClient",
             "OpsClient",

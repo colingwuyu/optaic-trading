@@ -990,3 +990,182 @@ class DatasetScheduleOut(BaseModel):
     schedule: Optional[ScheduleConfigOut] = None
     deployment_id: Optional[str] = None
     orchestrator_kind: Optional[str] = None
+
+
+# --- Space and User Management Schemas ---
+
+
+class UserCreate(BaseModel):
+    """Create a user with Personal Space."""
+
+    display_name: str = Field(examples=["Alice Smith"])
+    email: Optional[str] = Field(default=None, examples=["alice@example.com"])
+
+
+class UserWithSpaceOut(BaseModel):
+    """User creation response with Personal Space info."""
+
+    principal_id: UUID
+    display_name: str
+    email: Optional[str]
+    space_id: UUID
+    official_subspace_id: UUID
+    staging_subspace_id: UUID
+
+
+class TeamSpaceCreate(BaseModel):
+    """Create a Team Space with owner."""
+
+    name: str = Field(examples=["Quant Research Team"])
+    owner_principal_id: UUID = Field(examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"])
+    member_principal_ids: Optional[List[UUID]] = Field(
+        default=None,
+        examples=[
+            [
+                "11111111-1111-1111-1111-111111111111",
+                "22222222-2222-2222-2222-222222222222",
+            ]
+        ],
+    )
+    description: Optional[str] = Field(default=None, examples=["Our research team"])
+
+
+class SpaceOut(BaseModel):
+    """Space creation response."""
+
+    space_id: UUID
+    name: str
+    space_kind: str
+    official_subspace_id: UUID
+    staging_subspace_id: UUID
+
+
+class CustomSubspaceCreate(BaseModel):
+    """Create a custom subspace."""
+
+    name: str = Field(examples=["Experiments"])
+    description: Optional[str] = Field(
+        default=None, examples=["Custom subspace for experiments"]
+    )
+
+
+class SubspaceOut(BaseModel):
+    """Subspace response."""
+
+    id: UUID
+    name: str
+    subspace_kind: str
+    parent_space_id: UUID
+
+
+class ResourceCopy(BaseModel):
+    """Copy a resource to another location."""
+
+    target_parent_id: UUID = Field(
+        examples=["9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1"],
+        description="Target parent resource (usually a Project in user's space)",
+    )
+    new_name: Optional[str] = Field(
+        default=None,
+        examples=["My FredPipeline"],
+        description="Optional new name for the copy",
+    )
+
+
+class ResourceCopyOut(BaseModel):
+    """Resource copy response."""
+
+    id: UUID
+    source_id: UUID
+    name: str
+    type: str
+    parent_id: UUID
+    owner_principal_id: UUID
+    derived_from_id: UUID
+
+
+# =============================================================================
+# Definition Upload Schemas
+# =============================================================================
+
+
+class DefinitionUploadOut(BaseModel):
+    """Definition upload response."""
+
+    id: UUID
+    name: str
+    version: str
+    definition_type: str
+    code_ref: str
+    status: str  # draft | active
+    evaluation_status: str  # pending | running | passed | failed | skipped
+    artifact_ref: str
+    tests_total: Optional[int] = None
+    tests_passed: Optional[int] = None
+    tests_failed: Optional[int] = None
+    issues: List[str] = Field(default_factory=list)
+
+
+class DefinitionDeployOut(BaseModel):
+    """Definition deploy response."""
+
+    id: UUID
+    name: str
+    code_ref: str
+    status: str
+
+
+class DefinitionTestRerunOut(BaseModel):
+    """Definition test re-run response."""
+
+    id: UUID
+    evaluation_status: str
+    tests_total: int
+    tests_passed: int
+    tests_failed: int
+    duration_ms: int
+    passed: bool
+    failures: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class DefinitionDetailsOut(BaseModel):
+    """Definition upload details response."""
+
+    id: UUID
+    name: str
+    version: str
+    definition_type: str
+    code_ref: str
+    module_file: str
+    test_suite_file: Optional[str] = None
+    status: str
+    evaluation_status: str
+    artifact_ref: str
+    original_filename: str
+    upload_size_bytes: int
+    tests_total: Optional[int] = None
+    tests_passed: Optional[int] = None
+    tests_failed: Optional[int] = None
+    test_duration_ms: Optional[int] = None
+    uploaded_by: str
+    uploaded_at: str
+    manifest: Dict[str, Any] = Field(default_factory=dict)
+
+
+class DefinitionListItem(BaseModel):
+    """Definition list item response."""
+
+    id: UUID
+    name: str
+    definition_type: str
+    code_ref: Optional[str] = None
+    status: str
+    category: Optional[str] = None
+    version: Optional[str] = None
+
+
+class DefinitionListOut(BaseModel):
+    """Definition list response."""
+
+    items: List[DefinitionListItem]
+    next_cursor: Optional[str] = None

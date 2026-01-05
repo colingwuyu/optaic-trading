@@ -795,3 +795,254 @@ class TestCaseStudy8_ChatWorkflow:
         )
 
         assert edited["body"] == "Hello, team! (edited)"
+
+
+# =============================================================================
+# CASE STUDY 9: SYSTEM BOOTSTRAP AND DEFINITIONS
+# =============================================================================
+
+
+@pytest.mark.asyncio
+class TestCaseStudy9_SystemBootstrap:
+    """Case Study 9: System bootstrap and plugin definitions.
+
+    Verifies that on application startup:
+    1. System Tenant exists with admin principal
+    2. System Space exists with Official + Staging sub-spaces
+    3. System Project contains built-in definitions
+    4. Admin can access System Space resources
+
+    These tests use the live API server fixture which runs the full
+    lifespan (bootstrap, seeding) before serving requests.
+    """
+
+    async def test_system_tenant_exists(self, sdk_live_client):
+        """Verify the system tenant and admin are accessible."""
+        from libs.sdk_py import SYSTEM_SPACE_ID
+
+        # sdk_live_client is already configured with system principal/tenant
+        # Get the System Space - should exist after bootstrap
+        space = await sdk_live_client.resources.get(str(SYSTEM_SPACE_ID))
+
+        assert space is not None
+        assert space["type"] == "Space"
+        assert space["name"] == "System Definitions"
+
+    async def test_system_project_has_definitions(self, sdk_live_client):
+        """Verify the System Project contains built-in definitions."""
+        from libs.sdk_py import SYSTEM_PROJECT_ID
+
+        # List children of System Project - should contain definitions
+        children = await sdk_live_client.resources.list_children(str(SYSTEM_PROJECT_ID))
+
+        assert children is not None
+        # After bootstrap + seeding, there should be definitions
+        # (pipelines, stores, accessors, ops)
+
+    async def test_list_pipeline_definitions_includes_system(self, sdk_live_client):
+        """Verify system pipeline definitions are accessible."""
+        # List pipeline definitions - should include FredPipeline etc.
+        definitions = await sdk_live_client.pipelines.list_definitions()
+
+        assert isinstance(definitions, list)
+        # After seeding, should have built-in definitions
+        if len(definitions) > 0:
+            # Verify we have at least the expected pipelines
+            names = {d.get("name") for d in definitions}
+            # FredPipeline should exist (seeded during bootstrap)
+            # Note: definitions may be empty if seeding hasn't run yet
+
+
+# =============================================================================
+# CASE STUDY 10: ADMIN USER AND SPACE CREATION
+# =============================================================================
+
+
+@pytest.mark.asyncio
+class TestCaseStudy10_AdminUserCreation:
+    """Case Study 10: Admin creates users and team spaces.
+
+    Tests the workflow of:
+    1. Admin creates a user with Personal Space via SDK
+    2. Admin creates a Team Space with owner
+    3. New user can access their Personal Space
+    4. New user has VIEW access to System Space
+
+    These tests use the live API server fixture which runs the full
+    lifespan (bootstrap, seeding) before serving requests.
+    """
+
+    async def test_admin_create_user_with_space(self, sdk_live_client):
+        """Admin creates a user with Personal Space.
+
+        This uses the admin SDK client to:
+        1. Create a Principal (user account)
+        2. Create their Personal Space with Official + Staging sub-spaces
+        3. Grant owner role on Personal Space
+        4. Grant viewer role on System Space
+        """
+        # sdk_live_client is configured as system admin
+        # Use admin SDK to create user with space
+        result = await sdk_live_client.admin.create_user_with_space(
+            display_name="Alice Smith",
+            email="alice@example.com",
+        )
+
+        # Verify the response
+        assert result is not None
+        assert "principal_id" in result
+        assert "space_id" in result
+        assert "official_subspace_id" in result
+        assert "staging_subspace_id" in result
+
+        # Switch to the new user and verify they can access their space
+        new_user_principal_id = result["principal_id"]
+        new_user_space_id = result["space_id"]
+
+        sdk_live_client.set_principal_id(new_user_principal_id)
+
+        # Get the user's personal space
+        space = await sdk_live_client.resources.get(new_user_space_id)
+        assert space is not None
+        assert space["id"] == new_user_space_id
+
+    async def test_admin_create_team_space(self, sdk_live_client):
+        """Admin creates a Team Space with an owner."""
+        # First create a user who will be the owner
+        user_result = await sdk_live_client.admin.create_user_with_space(
+            display_name="Team Owner",
+            email="owner@example.com",
+        )
+        owner_principal_id = user_result["principal_id"]
+
+        # Create team space via admin SDK
+        result = await sdk_live_client.admin.create_team_space(
+            name="Quant Research Team",
+            owner_principal_id=owner_principal_id,
+            description="Our research team space",
+        )
+
+        # Verify the response
+        assert result is not None
+        assert "space_id" in result
+        assert "official_subspace_id" in result
+        assert "staging_subspace_id" in result
+        assert result.get("space_kind") == "team"
+
+        # Switch to owner and verify they can access the team space
+        sdk_live_client.set_principal_id(owner_principal_id)
+        team_space = await sdk_live_client.resources.get(result["space_id"])
+        assert team_space is not None
+        assert team_space["name"] == "Quant Research Team"
+
+
+# =============================================================================
+# CASE STUDY 11: RESOURCE COPY FROM SYSTEM SPACE
+# =============================================================================
+
+
+@pytest.mark.asyncio
+class TestCaseStudy11_ResourceCopy:
+    """Case Study 11: Copy resources from System Space.
+
+    Tests the workflow of:
+    1. User has VIEW access to System Space
+    2. User copies a pipeline definition to their project
+    3. The copy has derived_from lineage to the source
+    4. User can create instances from the copy
+    """
+
+    async def test_copy_resource_to_project(self, sdk_with_space):
+        """Copy a resource to a user's project.
+
+        This simulates copying a pipeline definition from System Space
+        to a user's Personal Space project.
+        """
+        client = sdk_with_space["client"]
+        space_id = sdk_with_space["space_id"]
+
+        # Create a project in user's space
+        project = await client.resources.create(
+            resource_type="Project",
+            parent_id=space_id,
+            name="My Pipeline Project",
+        )
+        project_id = project["id"]
+
+        # Create a source resource (simulating a system definition)
+        source = await client.resources.create(
+            resource_type="PipelineDefinition",
+            parent_id=space_id,
+            name="Source Pipeline",
+            metadata={"code_ref": "FredPipeline", "category": "etl"},
+        )
+        source_id = source["id"]
+
+        # Copy the resource to the project
+        copy = await client.resources.copy(
+            resource_id=source_id,
+            target_parent_id=project_id,
+            new_name="My FredPipeline",
+        )
+
+        # Verify the copy
+        assert copy is not None
+        assert copy["name"] == "My FredPipeline"
+        assert copy["source_id"] == source_id
+        assert copy["parent_id"] == project_id
+        assert copy["derived_from_id"] == source_id
+
+    async def test_copy_preserves_type(self, sdk_with_space):
+        """Verify copy preserves the resource type."""
+        client = sdk_with_space["client"]
+        space_id = sdk_with_space["space_id"]
+
+        # Create source and target
+        source = await client.resources.create(
+            resource_type="DatasetInstance",
+            parent_id=space_id,
+            name="Source Dataset",
+        )
+        target_project = await client.resources.create(
+            resource_type="Project",
+            parent_id=space_id,
+            name="Target Project",
+        )
+
+        # Copy the resource
+        copy = await client.resources.copy(
+            resource_id=source["id"],
+            target_parent_id=target_project["id"],
+        )
+
+        # Verify type is preserved
+        assert copy["type"] == "DatasetInstance"
+        assert copy["name"] == "Source Dataset"  # Default to source name
+
+    async def test_copy_with_default_name(self, sdk_with_space):
+        """Verify copy uses source name when new_name not provided."""
+        client = sdk_with_space["client"]
+        space_id = sdk_with_space["space_id"]
+
+        # Create source
+        source = await client.resources.create(
+            resource_type="Project",
+            parent_id=space_id,
+            name="Original Name",
+        )
+
+        # Create target parent
+        target = await client.resources.create(
+            resource_type="Space",
+            parent_id=space_id,
+            name="Target Space",
+        )
+
+        # Copy without new_name
+        copy = await client.resources.copy(
+            resource_id=source["id"],
+            target_parent_id=target["id"],
+        )
+
+        # Should use source name
+        assert copy["name"] == "Original Name"

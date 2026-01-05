@@ -548,9 +548,7 @@ class TestUpstreamStatusTracking:
         resolver = LineageResolver()
 
         # Update status
-        await resolver.update_upstream_status(
-            db_session, downstream, upstream, "ready"
-        )
+        await resolver.update_upstream_status(db_session, downstream, upstream, "ready")
 
         # Verify status was updated (no refresh - changes are in memory via shared session)
         # The resolver's session.get() returns the same instance object from the session cache

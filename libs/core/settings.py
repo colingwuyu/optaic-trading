@@ -89,6 +89,44 @@ class Settings(BaseSettings):
         validation_alias="S3_BUCKET",
     )
 
+    # ==========================================================================
+    # Authentication Settings
+    # ==========================================================================
+
+    # Dev mode: Allow X-Principal-Id header-based auth (disable in production)
+    dev_auth_enabled: bool = Field(
+        default=True,
+        validation_alias="DEV_AUTH_ENABLED",
+    )
+
+    # API Key settings
+    api_key_prefix: str = Field(
+        default="optaic_",
+        validation_alias="API_KEY_PREFIX",
+    )
+
+    # OIDC/Keycloak settings
+    oidc_enabled: bool = Field(
+        default=False,
+        validation_alias="OIDC_ENABLED",
+    )
+    oidc_issuer_url: str = Field(
+        default="",
+        validation_alias="OIDC_ISSUER_URL",
+    )
+    oidc_client_id: str = Field(
+        default="",
+        validation_alias="OIDC_CLIENT_ID",
+    )
+    oidc_client_secret: str = Field(
+        default="",
+        validation_alias="OIDC_CLIENT_SECRET",
+    )
+    oidc_audience: str = Field(
+        default="",
+        validation_alias="OIDC_AUDIENCE",
+    )
+
     @field_validator("log_level")
     @classmethod
     def _validate_log_level(cls, value: str) -> str:

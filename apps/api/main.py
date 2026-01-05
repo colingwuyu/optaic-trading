@@ -11,9 +11,12 @@ from starlette.staticfiles import StaticFiles
 
 from apps.api.routers.activities import router as activities_router
 from apps.api.routers.attachments import router as attachments_router
+from apps.api.routers.auth import router as auth_router
 from apps.api.routers.chat import router as chat_router
 from apps.api.routers.datasets import router as datasets_router
+from apps.api.routers.definitions import router as definitions_router
 from apps.api.routers.experiments import router as experiments_router
+from apps.api.routers.governance import router as governance_router
 from apps.api.routers.guardrails import router as guardrails_router
 from apps.api.routers.health import router as health_router
 from apps.api.routers.merge_requests import router as merge_requests_router
@@ -27,6 +30,7 @@ from apps.api.routers.rbac import router as rbac_router
 from apps.api.routers.refs import router as refs_router
 from apps.api.routers.resources import router as resources_router
 from apps.api.routers.signals import router as signals_router
+from apps.api.routers.spaces import router as spaces_router
 from apps.api.routers.subscriptions import router as subscriptions_router
 from apps.api.routers.system import router as system_router
 from apps.api.routers.tenants import router as tenants_router
@@ -35,9 +39,15 @@ from libs.core.settings import get_settings
 
 tags_metadata = [
     {"name": "Health", "description": "Service health checks."},
+    {"name": "Auth", "description": "API key management and authentication."},
     {"name": "Tenants", "description": "Development-only tenant utilities."},
     {"name": "Principals", "description": "Development-only principal utilities."},
+    {"name": "Spaces", "description": "User and Team Space management."},
     {"name": "Resources", "description": "Resource CRUD, moves, and child listings."},
+    {
+        "name": "Governance",
+        "description": "Copy, branch, transfer, promote, merge operations.",
+    },
     {"name": "RBAC", "description": "Role bindings and effective permissions."},
     {"name": "Activities", "description": "Activity feed filtered by RBAC."},
     {"name": "Attachments", "description": "Attachment upload and finalize."},
@@ -58,6 +68,7 @@ tags_metadata = [
     {"name": "Experiments", "description": "Expression experiments and macros."},
     {"name": "Pipelines", "description": "Pipeline definitions, instances, and runs."},
     {"name": "Runs", "description": "PipelineRun and ExperimentRun execution."},
+    {"name": "Definitions", "description": "Definition plugin upload and management."},
 ]
 
 
@@ -123,9 +134,12 @@ app.add_middleware(
 )
 
 app.include_router(health_router)
+app.include_router(auth_router)
 app.include_router(tenants_router)
 app.include_router(principals_router)
+app.include_router(spaces_router)
 app.include_router(resources_router)
+app.include_router(governance_router)
 app.include_router(rbac_router)
 app.include_router(activities_router)
 app.include_router(attachments_router)
@@ -144,6 +158,7 @@ app.include_router(ops_router)
 app.include_router(experiments_router)
 app.include_router(pipelines_router)
 app.include_router(runs_router)
+app.include_router(definitions_router)
 
 webui_dist = _get_webui_dist()
 if webui_dist and webui_dist.is_dir():

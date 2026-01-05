@@ -11,6 +11,8 @@ from apps.api.deps import get_actor, get_db, get_guardrails_engine, reset_sessio
 from apps.api.pagination import decode_cursor, encode_cursor
 from apps.api.rbac_utils import authorize_or_403, get_resource_or_404
 from apps.api.schemas import (
+    ResourceCopy,
+    ResourceCopyOut,
     ResourceCreate,
     ResourceMove,
     ResourceOut,
@@ -21,7 +23,7 @@ from apps.api.schemas import (
 from libs.core.activity import ActivityEnvelope, tx_activity
 from libs.core.rbac.models import ActorContext, Permission
 from libs.core.versioning import initialize_versioning
-from libs.db.models.resource import Resource
+from libs.db.models.resource import Resource, ResourceEdge
 from optaic.guardrails.runtime.context import GuardrailsContext
 from optaic.guardrails.runtime.engine import GuardrailsBlocked, GuardrailsEngine
 from fastapi import HTTPException
@@ -378,3 +380,115 @@ async def delete_resource(
     )
     deleted, _activity = await tx_activity(db, envelope, domain_fn)
     return ResourceOut.model_validate(deleted)
+
+
+@router.post("/{resource_id}/copy", response_model=ResourceCopyOut, status_code=201)
+async def copy_resource(
+    resource_id: UUID,
+    payload: ResourceCopy = Body(
+        ...,
+        examples={
+            "default": {
+                "summary": "Copy resource",
+                "value": {
+                    "target_parent_id": "9b7e2b44-5a2e-4b12-8b6b-9e5f6a0cc3c1",
+                    "new_name": "My Copy",
+                },
+            }
+        },
+    ),
+    actor: ActorContext = Depends(get_actor),
+    db: AsyncSession = Depends(get_db),
+) -> ResourceCopyOut:
+    """Copy a resource to a new location.
+
+    Creates a copy of the source resource under the target parent.
+    The copy will have:
+    - A new UUID
+    - The copier as owner
+    - A derived_from lineage edge to the source
+
+    Requires:
+    - RESOURCE_READ on the source resource
+    - RESOURCE_CREATE_CHILD on the target parent
+
+    This is primarily used to copy plugin definitions from System Space
+    to user projects.
+    """
+    # Get source resource and verify read permission
+    source = await get_resource_or_404(db, actor.tenant_id, resource_id)
+    await authorize_or_403(db, actor, Permission.RESOURCE_READ, source.id)
+
+    # Get target parent and verify create permission
+    target_parent = await get_resource_or_404(
+        db, actor.tenant_id, payload.target_parent_id
+    )
+    await authorize_or_403(
+        db, actor, Permission.RESOURCE_CREATE_CHILD, target_parent.id
+    )
+
+    source_id = source.id
+    source_type = source.type
+    source_name = source.name
+    source_metadata = source.metadata_json.copy() if source.metadata_json else {}
+
+    new_id = uuid4()
+    new_name = payload.new_name or source_name
+
+    await reset_session(db)
+
+    async def domain_fn(session: AsyncSession) -> Resource:
+        # Create the copy
+        copy = Resource(
+            id=new_id,
+            tenant_id=actor.tenant_id,
+            type=source_type,
+            parent_id=payload.target_parent_id,
+            owner_principal_id=actor.id,
+            name=new_name,
+            status="active",
+            metadata_json={
+                **source_metadata,
+                "copied_from": str(source_id),
+            },
+        )
+        session.add(copy)
+        await session.flush()
+
+        # Create derived_from lineage edge
+        edge = ResourceEdge(
+            tenant_id=actor.tenant_id,
+            src_resource_id=new_id,  # The copy points to the source
+            dst_resource_id=source_id,
+            edge_type="derived_from",
+        )
+        session.add(edge)
+
+        # Initialize versioning for the copy
+        await initialize_versioning(session, copy, actor.id)
+        return copy
+
+    envelope = ActivityEnvelope(
+        tenant_id=actor.tenant_id,
+        actor_principal_id=actor.id,
+        resource_id=new_id,
+        resource_type=source_type,
+        action="resource.copied",
+        payload={
+            "source_id": str(source_id),
+            "source_name": source_name,
+            "target_parent_id": str(payload.target_parent_id),
+            "new_name": new_name,
+        },
+    )
+    copy, _activity = await tx_activity(db, envelope, domain_fn)
+
+    return ResourceCopyOut(
+        id=copy.id,
+        source_id=source_id,
+        name=copy.name,
+        type=copy.type,
+        parent_id=copy.parent_id,
+        owner_principal_id=copy.owner_principal_id,
+        derived_from_id=source_id,
+    )
