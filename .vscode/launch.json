@@ -85,6 +85,45 @@
       },
       "console": "integratedTerminal",
       "justMyCode": false
+    },
+    {
+      "name": "E2E: Full Stack Server",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/e2e_server.py",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      },
+      "subProcess": true,
+      "justMyCode": false,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "E2E: API Only (Hot Reload)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "apps.api.main:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8082",
+        "--reload",
+        "--reload-dir",
+        "apps/api",
+        "--reload-dir",
+        "libs"
+      ],
+      "envFile": "${workspaceFolder}\\.vscode\\.env.e2e",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      },
+      "subProcess": true,
+      "justMyCode": false,
+      "console": "integratedTerminal"
     }
   ]
 }

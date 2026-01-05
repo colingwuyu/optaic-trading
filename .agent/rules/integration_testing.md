@@ -257,6 +257,7 @@ jobs:
 For **business workflow testing** using the Python SDK, see:
 - **Workflow**: `.agent/workflows/e2e-sdk-scenario-tests.md`
 - **Tests**: `tests/e2e/test_case_studies.py`
+- **Auth Tests**: `tests/e2e/test_auth_e2e.py`
 
 E2E tests complement integration tests:
 
@@ -271,9 +272,75 @@ E2E tests use the SDK to simulate real user workflows, verifying:
 - Business logic completeness
 - Audit trail accuracy
 
-## 12. References
+## 12. Authentication Testing
+
+### Auth Test Setup
+
+Authentication E2E tests use ASGI transport with dev mode auth:
+
+```python
+@pytest_asyncio.fixture(scope="function")
+async def sdk_client():
+    httpx_client = AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    )
+    client = AsyncPlatformClient(
+        base_url="http://test",
+        client=httpx_client,
+    )
+    yield client
+    await client.close()
+
+@pytest_asyncio.fixture(scope="function")
+async def auth_test_setup(sdk_client):
+    tenant_id, principal_id = uuid4(), uuid4()
+    sdk_client.set_principal_id(principal_id)
+    sdk_client.set_tenant_id(tenant_id)
+
+    await sdk_client.tenants.create(name=f"TestTenant-{tenant_id}")
+    return {"client": sdk_client, "tenant_id": tenant_id, "principal_id": principal_id}
+```
+
+### Auth Test Categories
+
+| Category | Tests | File |
+|----------|-------|------|
+| API Key CRUD | Create, list, get, revoke | `test_auth_e2e.py` |
+| API Key Auth | Auth with key, verify user info | `test_auth_e2e.py` |
+| Key Revocation | Revoked key fails auth | `test_auth_e2e.py` |
+| Session Login | Register, login, logout | `test_auth_e2e.py` |
+| Dev Auth | Header-based auth (backwards compat) | `test_auth_e2e.py` |
+
+### API Key Authentication Pattern
+
+```python
+@pytest.mark.asyncio
+async def test_authenticate_with_api_key(auth_test_setup):
+    client = auth_test_setup["client"]
+
+    # Create key with dev auth
+    created = await client.auth.create_api_key(name="Test Key")
+    full_key = created["key"]
+
+    # Create new client using API key
+    api_key_client = AsyncPlatformClient(
+        base_url="http://test",
+        api_key=full_key,
+        client=AsyncClient(transport=ASGITransport(app=app), base_url="http://test"),
+    )
+
+    try:
+        user_info = await api_key_client.auth.get_current_user()
+        assert user_info["auth_method"] == "api_key"
+    finally:
+        await api_key_client.close()
+```
+
+## 13. References
 
 - `conftest.py` (root) - All test infrastructure fixtures
 - `tests/integration/conftest.py` - Integration-specific markers
+- `tests/e2e/test_auth_e2e.py` - Authentication E2E tests
 - `.claude/skills/devops-deployment/references/testing-patterns.md` - Testing philosophy
 - `.agent/workflows/e2e-sdk-scenario-tests.md` - E2E scenario testing workflow

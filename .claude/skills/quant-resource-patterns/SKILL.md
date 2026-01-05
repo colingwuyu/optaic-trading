@@ -203,6 +203,98 @@ Location: `apps/api/schemas.py` (Quant Domain section)
 | Operator | `OperatorOut`, `OperatorListOut`, `ExpressionEvaluateRequest`, `ExpressionEvaluateOut` |
 | Experiment | `ExperimentCreate`, `ExperimentOut`, `ExperimentRunRequest`, `ExprimentRunOut`, `MacroSaveOut` |
 
+## System Bootstrap and Space Hierarchy
+
+### System Bootstrap
+
+On application startup, the system bootstraps via `libs/core/bootstrap.py`:
+
+```python
+from libs.core.bootstrap import (
+    SYSTEM_TENANT_ID,      # 00000000-0000-0000-0000-000000000001
+    SYSTEM_SPACE_ID,       # 00000000-0000-0000-0000-000000000002
+    SYSTEM_PRINCIPAL_ID,   # 00000000-0000-0000-0000-000000000003
+    SYSTEM_TENANT_ROOT_ID, # 00000000-0000-0000-0000-000000000010
+    SYSTEM_PROJECT_ID,     # 00000000-0000-0000-0000-000000000013
+)
+
+# bootstrap_system() creates (idempotent):
+# 1. System Tenant
+# 2. Admin Principal (admin@optaic.local)
+# 3. TenantRoot Resource
+# 4. Default role permissions (owner, operator, viewer, auditor)
+# 5. System Space with Official + Staging sub-spaces
+# 6. System Project for definitions
+# 7. Admin owner role on System Space
+```
+
+### Space Hierarchy
+
+```
+TenantRoot
+└── Space (space_kind: personal|team|system)
+    ├── Subspace (subspace_kind: official)  ← Production resources
+    ├── Subspace (subspace_kind: staging)   ← Resources under review
+    └── Subspace (subspace_kind: custom)    ← User-created
+        └── Project
+            └── Resources (datasets, experiments, etc.)
+```
+
+### SpaceService Patterns
+
+`apps/api/services/space_service.py` provides:
+
+```python
+class SpaceService:
+    async def create_space_with_subspaces(...) -> SpaceCreationResult
+        # Creates Space + Official + Staging sub-spaces
+        # Grants owner role to owner_principal_id
+        # Emits activities for all creations
+
+    async def create_user_with_personal_space(...) -> UserCreationResult
+        # Creates Principal + Personal Space
+        # Grants owner on Personal Space
+        # (Optionally grant VIEW on System Space)
+
+    async def create_team_space(...) -> SpaceCreationResult
+        # Creates Team Space with owner
+        # Optionally grants operator to members
+```
+
+### Resource Copy Pattern
+
+Copy definitions from System Space to user projects:
+
+```python
+# API: POST /resources/{resource_id}/copy
+# SDK: client.resources.copy(resource_id, target_parent_id, new_name=...)
+
+# Creates:
+# 1. New resource with copier as owner
+# 2. derived_from lineage edge to source
+# 3. resource.copied activity
+```
+
+### Admin SDK
+
+`libs/sdk_py/admin.py` provides admin operations:
+
+```python
+# Create user with Personal Space
+result = await client.admin.create_user_with_space(
+    display_name="Alice Smith",
+    email="alice@example.com",
+)
+# Returns: principal_id, space_id, official_subspace_id, staging_subspace_id
+
+# Create Team Space
+result = await client.admin.create_team_space(
+    name="Quant Research Team",
+    owner_principal_id=owner_id,
+    member_principal_ids=[member1, member2],  # Optional
+)
+```
+
 ## Reference Files
 
 - [DB Model Patterns](references/db-patterns.md) - SQLAlchemy patterns

@@ -5,7 +5,12 @@
     "${workspaceFolder}\\libs"
   ],
   "python.testing.pytestEnabled": true,
-  "python.testing.pytestArgs": ["libs", "apps", "optaic"],
+  "python.testing.pytestArgs": [
+    "libs",
+    "apps",
+    "optaic",
+    "tests"
+  ],
   "ruff.lint.enable": true,
   "ruff.format.enable": true,
   "[python]": {

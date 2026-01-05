@@ -55,6 +55,9 @@ def _get_session_data_dir() -> Path:
 PREFECT_PORT = 14200
 MLFLOW_PORT = 14500
 CENTRIFUGO_PORT = 14000
+# Port for E2E test server - matches .vscode/.env.e2e configuration
+# Can be overridden via E2E_API_PORT environment variable
+API_SERVER_PORT = int(os.environ.get("E2E_API_PORT", "8082"))
 
 # Server processes (managed at session scope)
 _server_processes: dict[str, subprocess.Popen] = {}
@@ -487,3 +490,142 @@ def setup_test_session(test_engine):
     yield
 
     # Cleanup handled by pytest_unconfigure
+
+
+# =============================================================================
+# API SERVER FIXTURE (for live E2E tests)
+# =============================================================================
+
+
+def _ensure_schema_in_subprocess_db(db_url: str) -> None:
+    """Create database schema in a subprocess-compatible way.
+
+    The test_engine fixture creates schema with a patched AsyncSessionLocal,
+    but the subprocess uses its own engine. We need to ensure the schema
+    exists in the database file the subprocess will use.
+    """
+    from sqlalchemy import create_engine
+    from libs.db.base import Base
+    import libs.db.models  # noqa: F401 - Register models
+
+    # Convert async URL to sync for schema creation
+    sync_url = db_url.replace("+aiosqlite", "")
+    sync_engine = create_engine(sync_url, echo=False)
+
+    Base.metadata.create_all(sync_engine)
+    sync_engine.dispose()
+
+
+@pytest.fixture(scope="session")
+def api_server() -> Generator[str, None, None]:
+    """Start the API server for live E2E tests.
+
+    This runs uvicorn with the FastAPI app, which:
+    1. Runs lifespan startup hooks (bootstrap, seeding)
+    2. Serves the full API on a test port
+    3. Allows SDK clients to connect via HTTP
+
+    Uses a SEPARATE database from in-process tests to ensure isolation.
+    This prevents state leaking between test types.
+
+    Returns the API base URL.
+    """
+    api_url = f"http://127.0.0.1:{API_SERVER_PORT}"
+    health_url = f"{api_url}/healthz"
+
+    # Check if already running (e.g., "API: E2E Debug Server" from VS Code)
+    if _wait_for_server(health_url, timeout=2):
+        print(f"[api_server] Using existing server at {api_url}")
+        yield api_url
+        return
+
+    # Create a SEPARATE database for the live server tests
+    # This ensures isolation from in-process tests
+    live_db_dir = tempfile.mkdtemp(prefix="optaic_live_server_")
+    live_db_path = os.path.join(live_db_dir, "live_test.sqlite")
+    db_url = f"sqlite+aiosqlite:///{live_db_path}"
+    print(f"[api_server] Starting API with isolated DATABASE_URL={db_url}")
+
+    # Ensure schema exists in the database file (not patched)
+    # The subprocess uses its own engine, so we create schema directly
+    _ensure_schema_in_subprocess_db(db_url)
+
+    env = os.environ.copy()
+    env["DATABASE_URL"] = db_url
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "uvicorn",
+        "apps.api.main:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        str(API_SERVER_PORT),
+    ]
+
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env=env,
+        text=True,
+    )
+    _server_processes["api"] = proc
+
+    # Wait for server to be ready (give more time for lifespan)
+    if not _wait_for_server(health_url, timeout=60):
+        # Read any output for debugging
+        proc.terminate()
+        try:
+            out, _ = proc.communicate(timeout=5)
+            print(f"API server output:\n{out}")
+        except Exception:
+            proc.kill()
+        pytest.fail(f"API server did not start at {api_url}")
+
+    # Give a moment for lifespan to complete after healthz is available
+    time.sleep(2)
+
+    # Print first part of server output for debugging
+
+    if sys.platform != "win32":
+        # Use select for non-blocking read on Unix
+        import select as sel
+
+        if sel.select([proc.stdout], [], [], 0)[0]:
+            lines = proc.stdout.read(2000)
+            print(f"[api_server] Server output:\n{lines}")
+
+    yield api_url
+
+    # On cleanup, capture any remaining output
+    proc.terminate()
+    try:
+        out, _ = proc.communicate(timeout=5)
+        if out:
+            print(f"[api_server] Final output:\n{out[:2000]}")
+    except Exception:
+        proc.kill()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def sdk_live_client(api_server: str):
+    """Create an SDK client connected to the live API server.
+
+    This fixture provides a real HTTP connection to the API server,
+    allowing tests to verify startup hooks (bootstrap, seeding) work.
+
+    Uses a longer timeout (60s) for complex operations like creating
+    users with spaces which involve multiple DB operations.
+    """
+    from libs.sdk_py import AsyncPlatformClient, SYSTEM_PRINCIPAL_ID, SYSTEM_TENANT_ID
+
+    client = AsyncPlatformClient(
+        base_url=api_server,
+        principal_id=str(SYSTEM_PRINCIPAL_ID),
+        tenant_id=str(SYSTEM_TENANT_ID),
+        timeout=60.0,  # Longer timeout for complex operations
+    )
+    yield client
+    await client.close()

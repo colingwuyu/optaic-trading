@@ -20,7 +20,25 @@
       "Bash(uv run optaic --help:*)",
       "Bash(netstat:*)",
       "Bash(uv pip index:*)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(tasklist:*)",
+      "Bash(for i in 1 2 3)",
+      "Bash(do echo \"=== Run $i ===\")",
+      "Bash(done)",
+      "Bash(for i in 1 2 3 4 5)",
+      "Bash(curl:*)",
+      "Bash(DATABASE_URL=\"sqlite+aiosqlite:///./.tmp/optaic-e2e-data/db/optaic.sqlite\" uv run python:*)",
+      "Bash(timeout 15 uv run:*)",
+      "Bash(timeout 20 uv run:*)",
+      "Bash(E2E_API_URL=http://localhost:8082 uv run pytest:*)",
+      "Bash(taskkill //F //PID 573724)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(DATABASE_URL=\"sqlite+aiosqlite:///./.tmp/optaic-e2e-data/db/optaic.sqlite\" uv run pytest:*)",
+      "Bash(E2E_API_URL=http://localhost:8082 uv run python:*)",
+      "Bash(for i in 1 2 3 4 5 6 7 8 9 10)",
+      "Bash(do sleep 3)",
+      "Bash(break)"
     ]
   }
 }

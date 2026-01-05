@@ -66,6 +66,50 @@ Mocks are NOT allowed for internal application logic. Use real database sessions
 
 Tests are meant to **discover errors**, not just make test counts go up.
 
+## E2E Testing Architecture (CRITICAL)
+
+E2E tests run against a **separate full-stack backend server**, NOT using ASGI transport in-process.
+
+### How E2E Testing Works
+
+1. **Start the E2E Server** first (VS Code: "E2E: Full Stack Server" or `python scripts/e2e_server.py`)
+2. The server runs on port 8082 with its own SQLite database at `.tmp/optaic-e2e-data/`
+3. E2E tests connect to `http://localhost:8082` via the Python SDK
+4. Database migrations auto-run on server startup
+
+### E2E Test Setup Pattern
+
+```python
+# tests/e2e/test_*.py
+import os
+import pytest
+from libs.sdk_py import AsyncPlatformClient
+
+E2E_API_URL = os.environ.get("E2E_API_URL", "http://localhost:8082")
+
+@pytest_asyncio.fixture
+async def client():
+    client = AsyncPlatformClient(base_url=E2E_API_URL)
+    yield client
+    await client.close()
+```
+
+### Anti-Patterns (DO NOT DO)
+
+| Anti-Pattern | Why It's Wrong | Correct Approach |
+|--------------|----------------|------------------|
+| `ASGITransport(app=app)` | In-process testing, no real HTTP | Connect to external server |
+| Creating db_session fixtures | Tests shouldn't touch DB directly | Use SDK only |
+| Mocking HTTP responses | Defeats E2E purpose | Use real server |
+
+### Environment Variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `E2E_API_URL` | `http://localhost:8082` | Backend server URL |
+| `E2E_API_PORT` | `8082` | Server port |
+| `DATABASE_URL` | `.tmp/optaic-e2e-data/db/optaic.sqlite` | E2E database |
+
 ## Project Overview
 
 OptAIC is a resource management and activity tracking platform with an embedded web UI and Windows-friendly runtime. It provides a unified API for resources, chat, real-time updates, and audit trails. The system ships a single `optaic` CLI that boots API + worker + agent + Centrifugo and serves the React UI.
@@ -156,6 +200,54 @@ optaic-trading/
 - Core settings: `libs/core/settings.py`
 - Database: `libs/db/` (engine, session, migrations)
 - Migrations: `libs/db/alembic.ini`
+
+## Authentication
+
+OptAIC supports multiple authentication methods with priority-based fallback:
+
+| Priority | Method | Header/Cookie | Use Case |
+|----------|--------|---------------|----------|
+| 1 | API Key | `X-API-Key: optaic_xxx.secret` | SDK clients, automation |
+| 2 | OAuth/OIDC | `Authorization: Bearer <JWT>` | Azure AD SSO (production) |
+| 3 | Session Cookie | `optaic_session` cookie | Web GUI login |
+| 4 | Dev Headers | `X-Principal-Id` + `X-Tenant-Id` | Development only |
+
+### SDK Authentication
+
+```python
+# API Key authentication (recommended for SDK)
+client = AsyncPlatformClient(
+    base_url="http://localhost:8081",
+    api_key="optaic_abc123.secretkey...",
+)
+
+# Dev mode authentication (testing only)
+client = AsyncPlatformClient(
+    base_url="http://localhost:8081",
+)
+client.set_principal_id(principal_id)
+client.set_tenant_id(tenant_id)
+```
+
+### Auth Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/auth/keys` | POST | Create API key |
+| `/auth/keys` | GET | List API keys |
+| `/auth/keys/{id}` | DELETE | Revoke API key |
+| `/auth/me` | GET | Get current user info |
+| `/auth/login` | POST | Session login (dev mode) |
+| `/auth/logout` | POST | Session logout |
+| `/auth/register` | POST | Create local credential (dev mode) |
+
+### Key Files
+
+- `libs/core/auth.py` - AuthService (API keys, sessions, OIDC)
+- `libs/db/models/auth.py` - APIKey, LocalCredential models
+- `apps/api/routers/auth.py` - Auth API endpoints
+- `apps/api/deps.py` - Multi-auth dependency flow
+- `libs/sdk_py/client.py` - AuthClient for SDK
 
 ## Tech Stack
 

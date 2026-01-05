@@ -8,50 +8,15 @@ This workflow guides the design and implementation of end-to-end tests using the
 1. **Verify System Correctness**: Test the full stack (SDK → API → Database)
 2. **Validate SDK Design**: Ensure the SDK is intuitive and user-friendly
 
-## CRITICAL: SDK-ONLY REQUIREMENT
+## Why SDK-Based E2E Tests?
 
-**E2E tests must ONLY use the SDK. NO direct database access allowed.**
-
-### Why This Matters
-
-| Anti-Pattern | Problem |
-|--------------|---------|
-| Direct DB writes (`db_session.add()`) | Tests work but users can't replicate |
-| Importing `libs.db.models.*` | Tests bypass SDK, miss SDK bugs |
-| Creating fixtures via SQLAlchemy | Hides missing SDK features |
-| Using `test_engine` for data setup | Real users don't have DB access |
-
-### The Principle
-
-If something can't be done via SDK, it's a **missing SDK feature** that needs development:
-- Tests reveal SDK gaps and usability issues
-- Tests serve as living documentation for SDK usage
-- Awkward test code reveals awkward SDK design
-
-### Anti-Pattern Examples
-
-```python
-# WRONG: Direct database access
-from libs.db.models.identity import Principal, Tenant
-from libs.db.models.resource import Resource
-
-async def bad_fixture(test_engine):
-    async with AsyncSession(test_engine) as session:
-        tenant = Tenant(id=uuid4(), name="Test")  # WRONG!
-        session.add(tenant)
-        await session.commit()
-```
-
-```python
-# CORRECT: SDK-only approach
-async def good_fixture(sdk_client):
-    sdk_client.set_principal_id(uuid4())
-    sdk_client.set_tenant_id(uuid4())
-
-    # SDK creates tenant, principal, root resource, RBAC automatically
-    tenant = await sdk_client.tenants.create(name="Test")
-    return tenant
-```
+| Aspect | Benefit |
+|--------|---------|
+| **Real User Experience** | Tests exactly what users will experience |
+| **SDK Usability Feedback** | Awkward test code reveals awkward SDK design |
+| **Full Stack Validation** | Catches integration issues between layers |
+| **Living Documentation** | Tests serve as SDK usage examples |
+| **NO MOCKS Policy** | Real database, real API, real behavior |
 
 ---
 
@@ -59,40 +24,41 @@ async def good_fixture(sdk_client):
 
 ### 1.1 Identify Business Domain Features
 
-Review implemented features to identify testable scenarios:
+Review the implemented features to identify testable scenarios:
 
 ```bash
-# Check implemented services and SDK methods
+# Check implemented resources and services
 ls apps/api/services/
 ls apps/api/routers/
-ls libs/sdk_py/
+ls libs/sdk_py/client.py
 ```
 
-Map features to SDK methods:
+Map features to user workflows:
 
-| Feature Area | SDK Client | Methods |
-|--------------|------------|---------|
-| Tenants | `client.tenants` | `create()`, `list()` |
-| Principals | `client.principals` | `create()`, `list()` |
-| Resources | `client.resources` | `create()`, `get()`, `update()`, `delete()` |
-| RBAC | `client.rbac` | `grant()`, `revoke()`, `list_grants()` |
-| Activities | `client.activities` | `list()` |
-| Chat | `client.chat` | `create_channel()`, `send_message()` |
-| Pipelines | `client.pipelines` | `submit_definition()`, `create_instance()` |
-| Experiments | `client.experiments` | `create()`, `run()`, `update()` |
-| Signals | `client.signals` | `list()`, `register()`, `validate()` |
+| Feature Area | User Workflow | SDK Methods |
+|--------------|---------------|-------------|
+| Authentication | API key management | `auth.create_api_key()`, `auth.revoke_api_key()`, `auth.get_current_user()` |
+| Data Pipelines | Ingest economic data | `pipelines.submit_definition()`, `pipelines.create_instance()` |
+| Experiments | Explore expressions | `experiments.create()`, `experiments.run()` |
+| Signals | Register alpha signals | `signals.create()`, `signals.validate()` |
+| Resources | Organize work | `resources.create()`, `resources.move()` |
+| RBAC | Control access | `rbac.grant_role()`, `rbac.list_grants()` |
+| Chat | Collaborate | `chat.create_channel()`, `chat.send_message()` |
+| Versioning | Track changes | `refs.create_branch()`, `refs.merge()` |
 
 ### 1.2 Design Case Study Scenarios
 
-Each case study should represent a **coherent business workflow**:
+Each case study should represent a **coherent business workflow**, not isolated operations.
 
 **Good Scenario Design:**
 ```
 Case Study: Quantitative Researcher Daily Workflow
 1. Create a project for today's research
-2. Create an expression experiment
+2. Create an expression experiment with MEAN(close, 20)
 3. Run the experiment to preview results
-4. Verify audit trail captures all actions
+4. If successful, save as a reusable macro
+5. Register the result as a signal
+6. Verify audit trail captures all actions
 ```
 
 **Bad Scenario Design:**
@@ -103,208 +69,160 @@ test_update_resource()
 test_delete_resource()
 ```
 
----
+### 1.3 Scenario Coverage Matrix
 
-## Phase 2: Test Infrastructure Setup
+Ensure scenarios cover all dimensions:
 
-### 2.1 SDK-Only Fixture Pattern
+| Dimension | Coverage Check |
+|-----------|----------------|
+| **CRUD Operations** | Create, Read, Update, Delete for each resource type |
+| **Business Logic** | Validation rules, status transitions, guardrails |
+| **Cross-Resource** | Relationships, lineage, hierarchies |
+| **RBAC** | Permission checks, role inheritance |
+| **Audit** | Activity emission, audit log queries |
+| **Error Cases** | Invalid inputs, permission denied, not found |
 
-```python
-"""E2E Test Fixtures - tests/e2e/conftest.py"""
+## Appendix: Case Study Templates
 
-import pytest_asyncio
-from uuid import uuid4
-from httpx import ASGITransport, AsyncClient
-
-from apps.api.main import app
-from libs.sdk_py import AsyncPlatformClient
-
-
-@pytest_asyncio.fixture(scope="function")
-async def sdk_client():
-    """Base SDK client with ASGI transport."""
-    httpx_client = AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-    )
-    client = AsyncPlatformClient(
-        base_url="http://test",
-        client=httpx_client,
-    )
-    yield client
-    await client.close()
-
-
-@pytest_asyncio.fixture(scope="function")
-async def sdk_with_tenant(sdk_client):
-    """SDK client with tenant bootstrapped via SDK.
-
-    The tenants.create() API automatically:
-    - Creates the Tenant record
-    - Creates the calling Principal (owner)
-    - Creates a TenantRoot resource
-    - Sets up default role permissions
-    - Grants owner role to the caller
-    """
-    tenant_id = uuid4()
-    principal_id = uuid4()
-
-    sdk_client.set_principal_id(principal_id)
-    sdk_client.set_tenant_id(tenant_id)
-
-    # SDK call - no direct DB access!
-    tenant = await sdk_client.tenants.create(name=f"TestTenant-{tenant_id}")
-
-    return {
-        "client": sdk_client,
-        "tenant_id": tenant["id"],
-        "principal_id": principal_id,
-        "root_resource_id": tenant.get("root_resource_id"),
-    }
-
-
-@pytest_asyncio.fixture(scope="function")
-async def sdk_with_space(sdk_with_tenant):
-    """SDK client with tenant and Space via SDK."""
-    client = sdk_with_tenant["client"]
-    root_resource_id = sdk_with_tenant["root_resource_id"]
-
-    # SDK call - no direct DB access!
-    space = await client.resources.create(
-        resource_type="Space",
-        parent_id=root_resource_id,
-        name="Test Space",
-    )
-
-    return {
-        **sdk_with_tenant,
-        "space_id": space["id"],
-    }
-```
-
----
-
-## Phase 3: Writing Scenario Tests
-
-### 3.1 Test Structure Pattern
+### Template A: CRUD Workflow
 
 ```python
-class TestCaseStudy_QuantResearchWorkflow:
-    """Case Study: Quantitative Researcher builds an experiment.
+class TestCaseStudy_ResourceManagement:
+    """Basic resource lifecycle testing."""
 
-    Persona: Quant researcher exploring alpha ideas
-    Goal: Create, test, and iterate on expressions
-    Success: Experiment runs successfully with audit trail
-    """
-
-    async def test_full_research_workflow(self, sdk_with_space):
-        """
-        Scenario: Researcher creates and runs an experiment
-
-        Given: A researcher with a project space
-        When: They create and run an experiment
-        Then: Results are returned with audit trail
-        """
+    async def test_create_read_update_delete(self, sdk_with_space):
         client = sdk_with_space["client"]
         space_id = sdk_with_space["space_id"]
 
-        # Step 1: Create a project via SDK
-        project = await client.resources.create(
+        # CREATE
+        resource = await client.resources.create(
             resource_type="Project",
             parent_id=space_id,
-            name="Momentum Signal Research",
+            name="Test Project",
         )
-        assert project["name"] == "Momentum Signal Research"
+        assert resource["id"]
+        resource_id = resource["id"]
 
-        # Step 2: Create an experiment via SDK
-        experiment = await client.experiments.create(
-            parent_id=project["id"],
-            name="20-day Momentum",
-            expression="MEAN(close, 20)",
+        # READ
+        fetched = await client.resources.get(resource_id)
+        assert fetched["name"] == "Test Project"
+
+        # UPDATE
+        updated = await client.resources.update(
+            resource_id=resource_id,
+            name="Updated Project",
         )
-        assert "id" in experiment
+        assert updated["name"] == "Updated Project"
 
-        # Step 3: Verify audit trail via SDK
-        activities = await client.activities.list(resource_id=project["id"])
-        actions = [a["action"] for a in activities]
-        assert len(activities) >= 2  # resource.created + experiment.created
+        # DELETE (soft)
+        await client.resources.delete(resource_id)
+        deleted = await client.resources.get(resource_id)
+        assert deleted["status"] == "deleted"
 ```
 
-### 3.2 Multi-User Testing via SDK
+### Template B: Multi-User Workflow
 
 ```python
-async def test_multi_user_workflow(self, sdk_with_space):
-    """Test involving multiple users."""
-    client = sdk_with_space["client"]
-    space_id = sdk_with_space["space_id"]
+class TestCaseStudy_TeamCollaboration:
+    """Tests involving multiple users with different permissions."""
 
-    # Create another user via SDK (not direct DB!)
-    other_user = await client.principals.create(
-        display_name="Other User",
-        email=f"other-{uuid4()}@example.com",
-    )
+    async def test_owner_and_viewer_permissions(self, test_engine, sdk_client):
+        # Setup: Create two users
+        owner_id, viewer_id = uuid4(), uuid4()
+        # ... setup both users ...
 
-    # Create a project
-    project = await client.resources.create(
-        resource_type="Project",
-        parent_id=space_id,
-        name="Shared Project",
-    )
+        # Owner creates resource
+        owner_client = sdk_client.with_principal(owner_id)
+        project = await owner_client.resources.create(...)
 
-    # Grant role via SDK
-    grant = await client.rbac.grant(
-        subject_principal_id=other_user["id"],
-        role_name="viewer",
-        scope_resource_id=project["id"],
-    )
-    assert grant is not None
+        # Viewer can read but not modify
+        viewer_client = sdk_client.with_principal(viewer_id)
+        # Grant viewer role...
+
+        fetched = await viewer_client.resources.get(project["id"])
+        assert fetched  # Can read
+
+        with pytest.raises(PermissionError):
+            await viewer_client.resources.delete(project["id"])  # Cannot delete
+```
+
+### Template C: Audit Trail Verification
+
+```python
+class TestCaseStudy_AuditCompliance:
+    """Verify all operations are properly audited."""
+
+    async def test_operations_create_audit_trail(self, sdk_with_space):
+        client = sdk_with_space["client"]
+        space_id = sdk_with_space["space_id"]
+
+        # Perform operations
+        project = await client.resources.create(...)
+        await client.resources.update(resource_id=project["id"], name="New Name")
+
+        # Query audit log
+        activities = await client.activities.list(
+            resource_id=project["id"],
+        )
+
+        actions = [a["action"] for a in activities]
+        assert "resource.created" in actions
+        assert "resource.updated" in actions
+
+        # Verify payload contains relevant details
+        create_activity = next(a for a in activities if a["action"] == "resource.created")
+        assert create_activity["payload"]["name"] == project["name"]
 ```
 
 ---
 
-## Phase 4: SDK Design Feedback Loop
+### Template D: Authentication Workflow
 
-### When Tests Reveal SDK Gaps
+```python
+class TestCaseStudy_Authentication:
+    """Authentication and API key management."""
 
-If you can't implement a test via SDK, that's a **missing SDK feature**:
+    async def test_api_key_lifecycle(self, sdk_with_tenant):
+        """Test full API key lifecycle: create, use, revoke."""
+        client = sdk_with_tenant["client"]
 
-1. **Document** the gap in the test file with `# TODO(SDK)` comment
-2. **Implement** the missing SDK method in `libs/sdk_py/`
-3. **Update** the test to use the new SDK method
-4. **Verify** all tests pass
+        # CREATE API KEY
+        result = await client.auth.create_api_key(
+            name="Test Key",
+            scopes=["read", "write"],
+            expires_in_days=30,
+        )
+        assert result["key"].startswith("optaic_")
+        full_key = result["key"]
+        key_id = result["id"]
 
-### SDK Usability Checklist
+        # USE API KEY
+        api_key_client = AsyncPlatformClient(
+            base_url=client._base_url,
+            api_key=full_key,
+            client=AsyncClient(transport=ASGITransport(app=app), base_url="http://test"),
+        )
 
-| Criterion | Question | Red Flag |
-|-----------|----------|----------|
-| **Discoverability** | Can I find the method? | Buried in unexpected location |
-| **Naming** | Does name match intent? | `register` vs `create` confusion |
-| **Parameters** | Are required params obvious? | Too many, unclear names |
-| **Response** | Does response include what I need? | Missing `id`, `name` |
-| **Consistency** | Similar ops work similarly? | `create()` vs `submit()` |
+        try:
+            user_info = await api_key_client.auth.get_current_user()
+            assert user_info["auth_method"] == "api_key"
 
----
+            # REVOKE AND VERIFY
+            await client.auth.revoke_api_key(key_id)
 
-## Phase 5: Running E2E Tests
-
-```bash
-# Run all E2E tests
-uv run pytest tests/e2e/ -xvs
-
-# Run specific case study
-uv run pytest tests/e2e/test_case_studies.py::TestCaseStudy1 -xvs
-
-# Run with coverage
-uv run pytest tests/e2e/ --cov=libs/sdk_py --cov-report=term-missing
+            with pytest.raises(Exception):
+                await api_key_client.auth.get_current_user()
+        finally:
+            await api_key_client.close()
 ```
 
 ---
 
-## Summary
+## Output
 
-| Rule | Rationale |
-|------|-----------|
-| **SDK-ONLY** | Tests must use real SDK → API → DB path |
-| **No DB imports** | `libs.db.models.*` forbidden in E2E tests |
-| **No SQLAlchemy** | `AsyncSession`, `db_session` forbidden |
-| **Missing feature = SDK gap** | If you can't do it via SDK, add the SDK method |
+After completing this workflow, you should have **Comprehensive E2E tests** covering all major business workflows including:
+- Authentication (API keys, session login)
+- Resource management
+- Data pipelines
+- RBAC and permissions
+- Audit trails
