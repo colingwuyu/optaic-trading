@@ -606,13 +606,15 @@ class AuthService:
         Args:
             session: Database session
             tenant_id: Tenant ID
-            principal_id: Principal to attach credential to
+            principal_id: Principal to attach credential to (auto-created if doesn't exist)
             username: Username (unique within tenant)
             password: Plain text password (will be hashed)
 
         Returns:
             LocalCredential record
         """
+        from libs.db.models.identity import Principal
+
         # Check if username already exists in tenant
         result = await session.execute(
             select(LocalCredential).where(
@@ -631,6 +633,27 @@ class AuthService:
         )
         if result.scalar_one_or_none():
             raise InvalidCredentialsError("Principal already has a credential")
+
+        # Auto-create principal if it doesn't exist (dev mode convenience)
+        result = await session.execute(
+            select(Principal).where(Principal.id == principal_id)
+        )
+        if not result.scalar_one_or_none():
+            # Create principal for dev mode
+            principal = Principal(
+                id=principal_id,
+                tenant_id=tenant_id,
+                kind="user",
+                status="active",
+                display_name=username,  # Use username as display name
+            )
+            session.add(principal)
+            logger.info(
+                "auth.principal_auto_created",
+                principal_id=str(principal_id),
+                username=username,
+                tenant_id=str(tenant_id),
+            )
 
         # Hash password
         password_hash = _hash_key(password)

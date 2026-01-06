@@ -29,11 +29,12 @@ def ensure_schema_and_migrations() -> None:
     Strategy:
     1. Check if alembic_version table exists
        - If not: Fresh database - run alembic upgrade head (creates all tables)
-       - If yes: Run alembic upgrade head (applies pending migrations)
+       - If yes: Check if migrations are at head, skip if already up-to-date
+    2. Handle nested event loop (when called from async context like FastAPI lifespan)
 
     This handles both development (fresh SQLite) and production (migrations).
     """
-    from sqlalchemy import create_engine, inspect
+    from sqlalchemy import create_engine, inspect, text
     from libs.core.settings import get_settings
 
     settings = get_settings()
@@ -58,12 +59,75 @@ def ensure_schema_and_migrations() -> None:
 
         if "alembic_version" not in tables:
             logger.info("startup.fresh_database_detected")
+            # Run Alembic upgrade to head for fresh database
+            _run_alembic_upgrade(sync_url)
+        else:
+            # Check if already at head - skip if up-to-date
+            # This avoids running Alembic from async context (nested event loop)
+            with sync_engine.connect() as conn:
+                result = conn.execute(text("SELECT version_num FROM alembic_version"))
+                current_version = result.scalar()
 
-        # Run Alembic upgrade to head
-        _run_alembic_upgrade(sync_url)
+            if current_version and _is_at_head(current_version):
+                logger.info(
+                    "startup.migrations_already_at_head", version=current_version
+                )
+            else:
+                # Need to run migrations
+                _run_alembic_upgrade(sync_url)
 
     finally:
         sync_engine.dispose()
+
+
+def _is_at_head(current_version: str) -> bool:
+    """Check if current migration version is at head.
+
+    This is a lightweight check to avoid running Alembic unnecessarily,
+    especially when called from async context (nested event loop issue).
+
+    Returns True if we believe migrations are up-to-date based on:
+    - Current version matches a known migration revision
+    - The revision file exists and appears valid
+
+    Note: This is an optimization to skip Alembic when migrations were
+    already run (e.g., by e2e_server.py before starting API subprocess).
+    For fresh databases or when pending migrations exist, Alembic will run.
+    """
+    from pathlib import Path
+    import libs.db
+
+    db_package_dir = Path(libs.db.__file__).parent
+    versions_dir = db_package_dir / "migrations" / "versions"
+
+    if not versions_dir.exists():
+        return True  # No versions dir, assume OK
+
+    # Check if the current version exists as a migration file
+    # If we have the version file, assume migrations are applied
+    for pyfile in versions_dir.glob("*.py"):
+        if pyfile.name.startswith("_"):
+            continue
+        content = pyfile.read_text()
+        if f'revision: str = "{current_version}"' in content:
+            # Found the current version's migration file
+            # Check if any other migration depends on this (has it as down_revision)
+            # If none depend on it, it's likely the head
+            is_head = True
+            for other_file in versions_dir.glob("*.py"):
+                if other_file == pyfile or other_file.name.startswith("_"):
+                    continue
+                other_content = other_file.read_text()
+                if (
+                    "down_revision" in other_content
+                    and f'"{current_version}"' in other_content
+                ):
+                    # Another migration has this as down_revision, not at head
+                    is_head = False
+                    break
+            return is_head
+
+    return False
 
 
 def _run_alembic_upgrade(db_url: str) -> None:

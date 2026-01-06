@@ -11,6 +11,7 @@ from starlette.staticfiles import StaticFiles
 
 from apps.api.routers.activities import router as activities_router
 from apps.api.routers.attachments import router as attachments_router
+from apps.api.routers.audit import router as audit_router
 from apps.api.routers.auth import router as auth_router
 from apps.api.routers.chat import router as chat_router
 from apps.api.routers.datasets import router as datasets_router
@@ -20,6 +21,7 @@ from apps.api.routers.governance import router as governance_router
 from apps.api.routers.guardrails import router as guardrails_router
 from apps.api.routers.health import router as health_router
 from apps.api.routers.merge_requests import router as merge_requests_router
+from apps.api.routers.notifications import router as notifications_router
 from apps.api.routers.ops import router as ops_router
 from apps.api.routers.pipelines import router as pipelines_router
 from apps.api.routers.principals import router as principals_router
@@ -57,6 +59,8 @@ tags_metadata = [
     {"name": "MergeRequests", "description": "Merge request workflows."},
     {"name": "Promotions", "description": "Promotion requests and execution."},
     {"name": "Subscriptions", "description": "Resource subscriptions."},
+    {"name": "Audit", "description": "Audit log queries (admin-only)."},
+    {"name": "Notifications", "description": "User notification management."},
     {"name": "System", "description": "System upgrades and runtime info."},
     # Quant Domain
     {"name": "Datasets", "description": "Dataset preview, status, and refresh."},
@@ -150,6 +154,8 @@ app.include_router(refs_router)
 app.include_router(merge_requests_router)
 app.include_router(promotions_router)
 app.include_router(subscriptions_router)
+app.include_router(audit_router)
+app.include_router(notifications_router)
 app.include_router(system_router)
 # Quant Domain routers
 app.include_router(datasets_router)

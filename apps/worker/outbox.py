@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import fnmatch
 from datetime import datetime, timezone
 from typing import Awaitable, Callable, Dict, Iterable, Optional
 from uuid import UUID, uuid4
@@ -14,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import libs.db.models  # noqa: F401
 from libs.core.settings import get_settings
 from libs.db.models.activity import Outbox
-from libs.db.models.notification import AuditLog, Notification
+from libs.db.models.notification import AuditLog, Notification, NotificationPreference
 from libs.db.models.rbac import RoleBinding
 from libs.db.models.resource import Resource
 from libs.db.models.subscription import Subscription
@@ -212,6 +213,106 @@ async def _channel_members(
     return {principal_id for principal_id in result.all()}
 
 
+async def _resource_owner(
+    session: AsyncSession,
+    tenant_id: UUID,
+    resource_id: UUID,
+) -> UUID | None:
+    """Get the owner_principal_id for a resource."""
+    result = await session.scalars(
+        select(Resource.owner_principal_id).where(
+            Resource.id == resource_id,
+            Resource.tenant_id == tenant_id,
+        )
+    )
+    return result.first()
+
+
+async def _resource_delegators(
+    session: AsyncSession,
+    tenant_id: UUID,
+    resource_id: UUID,
+) -> set[UUID]:
+    """Get principals with owner/delegator role on resource or ancestors."""
+    scope_ids = await _resource_chain(session, tenant_id, resource_id)
+    if not scope_ids:
+        return set()
+
+    result = await session.scalars(
+        select(RoleBinding.principal_id).where(
+            RoleBinding.tenant_id == tenant_id,
+            RoleBinding.scope_resource_id.in_(scope_ids),
+            RoleBinding.role_name.in_({"owner", "delegator"}),
+            RoleBinding.revoked_at.is_(None),
+        )
+    )
+    return set(result.all())
+
+
+# Action patterns considered "mutations" for default notification filter
+_MUTATION_ACTION_PREFIXES = (
+    "resource.created",
+    "resource.updated",
+    "resource.deleted",
+    "transfer.",
+    "promotion.",
+)
+
+
+async def _should_notify(
+    session: AsyncSession,
+    tenant_id: UUID,
+    principal_id: UUID,
+    action: str,
+) -> bool:
+    """Check if principal wants notifications for this action type.
+
+    Returns True if the principal should be notified based on their preferences.
+    Default behavior (no preferences set): notify only for mutations.
+    """
+    result = await session.scalars(
+        select(NotificationPreference).where(
+            NotificationPreference.tenant_id == tenant_id,
+            NotificationPreference.principal_id == principal_id,
+        )
+    )
+    pref = result.first()
+
+    # Default: mutations only
+    if pref is None:
+        return action.startswith(_MUTATION_ACTION_PREFIXES)
+
+    if pref.muted:
+        return False
+
+    if pref.filter_mode == "all":
+        return True
+    elif pref.filter_mode == "mutations":
+        return action.startswith(_MUTATION_ACTION_PREFIXES)
+    elif pref.filter_mode == "custom":
+        return any(fnmatch.fnmatch(action, pattern) for pattern in pref.custom_actions)
+
+    # Fallback to mutations
+    return action.startswith(_MUTATION_ACTION_PREFIXES)
+
+
+async def _filter_watchers_by_preference(
+    session: AsyncSession,
+    tenant_id: UUID,
+    watchers: set[UUID],
+    action: str,
+) -> set[UUID]:
+    """Filter watchers based on their notification preferences."""
+    if not watchers:
+        return set()
+
+    filtered: set[UUID] = set()
+    for principal_id in watchers:
+        if await _should_notify(session, tenant_id, principal_id, action):
+            filtered.add(principal_id)
+    return filtered
+
+
 def build_activity_handler(publisher: Optional[CentrifugoPublisher]) -> Handler:
     async def handle_activity_outbox(session: AsyncSession, row: Outbox) -> None:
         payload = row.payload or {}
@@ -255,9 +356,16 @@ def build_activity_handler(publisher: Optional[CentrifugoPublisher]) -> Handler:
             resource_id = _coerce_uuid(resource.get("resource_id"))
             watchers: set[UUID] = set()
             if resource_id is not None:
+                # Add explicit subscribers
                 watchers |= await _subscription_watchers(
                     session, tenant_id, resource_id
                 )
+                # Add resource owner (implicit subscription)
+                owner_id = await _resource_owner(session, tenant_id, resource_id)
+                if owner_id is not None:
+                    watchers.add(owner_id)
+                # Add delegators (owner/delegator roles on resource or ancestors)
+                watchers |= await _resource_delegators(session, tenant_id, resource_id)
 
             action = str(payload.get("action") or "")
             if action.startswith(_CHAT_ACTION_PREFIXES):
@@ -270,8 +378,21 @@ def build_activity_handler(publisher: Optional[CentrifugoPublisher]) -> Handler:
                 if channel_id is not None:
                     watchers |= await _channel_members(session, tenant_id, channel_id)
 
+            # Don't notify the actor who performed the action
+            actor = payload.get("actor") or {}
+            if isinstance(actor, dict):
+                actor_principal_id = _coerce_uuid(actor.get("principal_id"))
+                if actor_principal_id is not None:
+                    watchers.discard(actor_principal_id)
+
+            # Don't notify the target principal (e.g., someone being mentioned)
             if target_principal_id is not None:
                 watchers.discard(target_principal_id)
+
+            # Filter watchers by notification preferences
+            watchers = await _filter_watchers_by_preference(
+                session, tenant_id, watchers, action
+            )
 
             for principal_id in watchers:
                 channels.add(f"t:{tenant_id}:u:{principal_id}")
@@ -281,14 +402,30 @@ def build_activity_handler(publisher: Optional[CentrifugoPublisher]) -> Handler:
     return handle_activity_outbox
 
 
-def default_handlers(*, publish: bool = True) -> Dict[str, Handler]:
-    publisher = None
-    if publish:
+# Module-level cached publisher for production use
+_cached_publisher: Optional[CentrifugoPublisher] = None
+
+
+def _get_cached_publisher() -> CentrifugoPublisher:
+    """Get or create a cached CentrifugoPublisher instance."""
+    global _cached_publisher
+    if _cached_publisher is None:
         settings = get_settings()
-        publisher = CentrifugoPublisher(
+        _cached_publisher = CentrifugoPublisher(
             api_url=settings.centrifugo_url,
             api_key=settings.centrifugo_api_key,
         )
+    return _cached_publisher
+
+
+def default_handlers(*, publish: bool = True) -> Dict[str, Handler]:
+    """Get default outbox handlers.
+
+    Args:
+        publish: If True, use cached CentrifugoPublisher for real-time delivery.
+                 If False, skip publishing (for testing).
+    """
+    publisher = _get_cached_publisher() if publish else None
     return {"activity": build_activity_handler(publisher)}
 
 

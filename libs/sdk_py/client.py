@@ -5,12 +5,16 @@ from uuid import UUID
 
 import httpx
 
+from .subscriptions import SubscriptionsClient
+
 if TYPE_CHECKING:
     from .admin import AdminClient
+    from .audit import AuditClient
     from .datasets import DatasetsClient
     from .definitions import DefinitionsClient
     from .experiments import ExperimentsClient
     from .governance import GovernanceClient
+    from .notifications import NotificationsClient
     from .ops import OpsClient
     from .pipelines import PipelinesClient
     from .signals import SignalsClient
@@ -89,6 +93,7 @@ class AsyncPlatformClient:
         self.promotions = PromotionsClient(self)
         self.rbac = RbacClient(self)
         self.activities = ActivitiesClient(self)
+        self.subscriptions = SubscriptionsClient(self)
         self.chat = ChatClient(self)
 
         # Admin client (lazy-loaded)
@@ -96,6 +101,10 @@ class AsyncPlatformClient:
 
         # Governance client (lazy-loaded)
         self._governance: "GovernanceClient | None" = None
+
+        # Audit and Notifications clients (lazy-loaded)
+        self._audit: "AuditClient | None" = None
+        self._notifications: "NotificationsClient | None" = None
 
         # Quant domain clients (lazy-loaded)
         self._ops: "OpsClient | None" = None
@@ -229,6 +238,26 @@ class AsyncPlatformClient:
 
             self._governance = GovernanceClient(self)
         return self._governance
+
+    # --- Audit and Notifications Clients (lazy-loaded) ---
+
+    @property
+    def audit(self) -> "AuditClient":
+        """Audit client for querying audit logs."""
+        if self._audit is None:
+            from .audit import AuditClient
+
+            self._audit = AuditClient(self)
+        return self._audit
+
+    @property
+    def notifications(self) -> "NotificationsClient":
+        """Notifications client for managing user notifications."""
+        if self._notifications is None:
+            from .notifications import NotificationsClient
+
+            self._notifications = NotificationsClient(self)
+        return self._notifications
 
     # --- Quant Domain Clients (lazy-loaded) ---
 

@@ -14,4 +14,6 @@ if engine.url.get_backend_name() == "sqlite":
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA foreign_keys=ON")
+        # Increase busy timeout to handle concurrent access (30 seconds)
+        cursor.execute("PRAGMA busy_timeout=30000")
         cursor.close()

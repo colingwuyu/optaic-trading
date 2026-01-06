@@ -8,11 +8,14 @@ from .constants import (
     SYSTEM_TENANT_ID,
     SYSTEM_TENANT_ROOT_ID,
 )
+from .audit import AuditClient
 from .datasets import DatasetsClient
 from .experiments import ExperimentsClient
+from .notifications import NotificationsClient
 from .ops import OpsClient
 from .pipelines import PipelinesClient
 from .signals import SignalsClient
+from .subscriptions import SubscriptionsClient
 
 __all__ = [
     "AsyncPlatformClient",
@@ -30,4 +33,8 @@ __all__ = [
     "OpsClient",
     "PipelinesClient",
     "SignalsClient",
+    # Service clients
+    "AuditClient",
+    "NotificationsClient",
+    "SubscriptionsClient",
 ]

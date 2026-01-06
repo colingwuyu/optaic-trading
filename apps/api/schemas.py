@@ -1169,3 +1169,93 @@ class DefinitionListOut(BaseModel):
 
     items: List[DefinitionListItem]
     next_cursor: Optional[str] = None
+
+
+# ============================================================================
+# Audit and Notification Schemas
+# ============================================================================
+
+
+class AuditLogEntry(BaseModel):
+    """Audit log entry with full activity envelope."""
+
+    id: UUID
+    tenant_id: UUID
+    activity_id: UUID
+    envelope: Dict[str, Any]
+    processed_at: datetime
+
+
+class AuditLogPage(BaseModel):
+    """Paginated audit log response."""
+
+    items: List[AuditLogEntry]
+    next_cursor: Optional[str] = None
+
+
+class NotificationOut(BaseModel):
+    """Notification with embedded activity event."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+    principal_id: UUID
+    activity_id: UUID
+    activity: Optional[ActivityEventV1] = None
+    created_at: datetime
+    read_at: Optional[datetime] = None
+
+
+class NotificationPage(BaseModel):
+    """Paginated notification response."""
+
+    items: List[NotificationOut]
+    next_cursor: Optional[str] = None
+    unread_count: int = 0
+
+
+class NotificationMarkRead(BaseModel):
+    """Mark notification as read/unread."""
+
+    read: bool = True
+
+
+class NotificationMarkAllReadOut(BaseModel):
+    """Response for mark all read operation."""
+
+    marked_count: int
+
+
+class NotificationPreferenceOut(BaseModel):
+    """Notification preference response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+    principal_id: UUID
+    filter_mode: str
+    custom_actions: List[str]
+    muted: bool
+    updated_at: datetime
+
+
+class NotificationPreferenceUpdate(BaseModel):
+    """Update notification preferences."""
+
+    filter_mode: Optional[str] = Field(
+        default=None,
+        examples=["mutations"],
+        description="Filter mode: 'all', 'mutations', or 'custom'",
+    )
+    custom_actions: Optional[List[str]] = Field(
+        default=None,
+        examples=[["resource.*", "chat.*"]],
+        description="Custom action patterns for 'custom' filter mode",
+    )
+    muted: Optional[bool] = Field(
+        default=None,
+        examples=[False],
+        description="If true, suppress all notifications",
+    )

@@ -133,6 +133,84 @@ await emit("guardrails.validated", correlation_id=correlation_id)
 await emit("promotion.merged", correlation_id=correlation_id)
 ```
 
+## Real-time Notifications (Outbox Worker)
+
+Activities are processed by the outbox worker which publishes to Centrifugo for real-time WebSocket delivery.
+
+### Notification Types
+
+| Type | Who | Mechanism | Opt-in? |
+|------|-----|-----------|---------|
+| **Implicit** | Owner + Delegators | Query Resource + RoleBinding | Automatic |
+| **Explicit** | Subscribers | Query Subscription table | User opts in |
+
+### Watchers Build Flow
+
+```python
+# Outbox worker builds watchers set:
+watchers: set[UUID] = set()
+
+# 1. Explicit subscribers (user opt-in)
+watchers |= await _subscription_watchers(session, tenant_id, resource_id)
+
+# 2. Resource owner (implicit - auto-notified)
+owner_id = await _resource_owner(session, tenant_id, resource_id)
+if owner_id:
+    watchers.add(owner_id)
+
+# 3. Delegators (owner/delegator roles on resource or ancestors)
+watchers |= await _resource_delegators(session, tenant_id, resource_id)
+
+# 4. CRITICAL: Exclude actor (don't notify yourself)
+watchers.discard(actor_principal_id)
+
+# 5. Filter by user notification preferences
+watchers = await _filter_watchers_by_preference(session, tenant_id, watchers, action)
+```
+
+### Notification Preferences
+
+Users configure via `PUT /notifications/preferences`:
+
+| Filter Mode | Actions Notified |
+|-------------|------------------|
+| `all` | All activity types |
+| `mutations` (default) | `resource.created/updated/deleted`, `transfer.*`, `promotion.*` |
+| `custom` | User-defined patterns (e.g., `["resource.*", "chat.*"]`) |
+
+```python
+# Custom pattern matching uses fnmatch
+await client.notifications.update_preferences(
+    filter_mode="custom",
+    custom_actions=["resource.*", "promotion.*"],
+)
+```
+
+### Anti-Patterns
+
+| Anti-Pattern | Why It's Wrong | Correct Approach |
+|--------------|----------------|------------------|
+| Notify actor about own action | Noisy, redundant | Always `watchers.discard(actor_id)` |
+| Hardcode notification targets | Inflexible | Build watchers dynamically |
+| Skip preference filtering | Users can't control noise | Always filter by preferences |
+| Notify without checking roles | Security issue | Use `_resource_delegators()` |
+
+### Subscription API (Explicit Opt-in)
+
+```python
+# Subscribe to a resource
+await client.subscriptions.create(
+    resource_id=folder_id,
+    scope="descendants",  # or "resource" for single resource
+)
+
+# List subscriptions
+subs = await client.subscriptions.list()
+
+# Unsubscribe
+await client.subscriptions.revoke(subscription_id)
+```
+
 ## Reference Files
 
 - [Payload Examples](references/payload-examples.md) - Example payloads by action type

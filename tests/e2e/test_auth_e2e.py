@@ -18,14 +18,18 @@ NO MOCKS - All tests use real API endpoints via SDK.
 
 from __future__ import annotations
 
+import os
 from uuid import UUID, uuid4
 
+import httpx
 import pytest
 import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
 
-from apps.api.main import app
 from libs.sdk_py import AsyncPlatformClient
+
+# E2E tests connect to an external server
+# Start the server with: python scripts/e2e_server.py
+E2E_API_URL = os.environ.get("E2E_API_URL", "http://localhost:8082")
 
 
 # =============================================================================
@@ -35,37 +39,36 @@ from libs.sdk_py import AsyncPlatformClient
 
 @pytest_asyncio.fixture(scope="function")
 async def sdk_client():
-    """Create an AsyncPlatformClient using ASGI transport for testing."""
-    httpx_client = AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-    )
-    client = AsyncPlatformClient(
-        base_url="http://test",
-        client=httpx_client,
-    )
+    """Create an AsyncPlatformClient connected to E2E test server.
+
+    NOTE: The E2E server must be running before tests execute.
+    Start it with: python scripts/e2e_server.py
+    """
+    client = AsyncPlatformClient(base_url=E2E_API_URL)
     yield client
     await client.close()
 
 
 @pytest_asyncio.fixture(scope="function")
 async def auth_test_setup(sdk_client: AsyncPlatformClient):
-    """Set up tenant and principal for auth testing."""
-    tenant_id = uuid4()
-    principal_id = uuid4()
+    """Set up environment for auth testing.
 
-    sdk_client.set_principal_id(principal_id)
-    sdk_client.set_tenant_id(tenant_id)
+    The E2E server bootstraps a system tenant on startup with:
+    - tenant_id: 00000000-0000-0000-0000-000000000001
+    - admin_id: 00000000-0000-0000-0000-000000000003
+    - space_id: 00000000-0000-0000-0000-000000000002
+    """
+    # Use bootstrap admin principal and tenant
+    BOOTSTRAP_TENANT_ID = "00000000-0000-0000-0000-000000000001"
+    BOOTSTRAP_ADMIN_ID = "00000000-0000-0000-0000-000000000003"
 
-    # Create tenant (this creates the principal implicitly in dev mode)
-    tenant_result = await sdk_client.tenants.create(
-        name=f"AuthTestTenant-{tenant_id}",
-    )
+    sdk_client.set_principal_id(BOOTSTRAP_ADMIN_ID)
+    sdk_client.set_tenant_id(BOOTSTRAP_TENANT_ID)
 
     return {
         "client": sdk_client,
-        "tenant_id": UUID(tenant_result["id"]),
-        "principal_id": principal_id,
+        "tenant_id": UUID(BOOTSTRAP_TENANT_ID),
+        "principal_id": UUID(BOOTSTRAP_ADMIN_ID),
     }
 
 
@@ -233,14 +236,9 @@ async def test_authenticate_with_api_key(auth_test_setup):
     full_key = created["key"]
 
     # Create a new client that uses the API key
-    httpx_client = AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-    )
     api_key_client = AsyncPlatformClient(
-        base_url="http://test",
+        base_url=E2E_API_URL,
         api_key=full_key,
-        client=httpx_client,
     )
 
     try:
@@ -268,14 +266,9 @@ async def test_api_key_auth_can_create_resources(auth_test_setup):
     full_key = created["key"]
 
     # Create a new client using the API key
-    httpx_client = AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-    )
     api_key_client = AsyncPlatformClient(
-        base_url="http://test",
+        base_url=E2E_API_URL,
         api_key=full_key,
-        client=httpx_client,
     )
 
     try:
@@ -303,14 +296,9 @@ async def test_revoked_api_key_fails_authentication(auth_test_setup):
     await client.auth.revoke_api_key(created["id"])
 
     # Try to use the revoked key
-    httpx_client = AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-    )
     revoked_client = AsyncPlatformClient(
-        base_url="http://test",
+        base_url=E2E_API_URL,
         api_key=full_key,
-        client=httpx_client,
     )
 
     try:
@@ -327,14 +315,9 @@ async def test_revoked_api_key_fails_authentication(auth_test_setup):
 @pytest.mark.asyncio
 async def test_invalid_api_key_fails_authentication():
     """Test that invalid API keys fail authentication."""
-    httpx_client = AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-    )
     invalid_client = AsyncPlatformClient(
-        base_url="http://test",
+        base_url=E2E_API_URL,
         api_key="optaic_invalid123.fakesecret456789012345678901234",
-        client=httpx_client,
     )
 
     try:
@@ -424,14 +407,9 @@ async def test_get_current_user_with_api_key(auth_test_setup):
     full_key = created["key"]
 
     # Use the API key
-    httpx_client = AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-    )
     api_key_client = AsyncPlatformClient(
-        base_url="http://test",
+        base_url=E2E_API_URL,
         api_key=full_key,
-        client=httpx_client,
     )
 
     try:
@@ -462,14 +440,9 @@ async def test_principal_can_have_multiple_keys(auth_test_setup):
 
     # Verify all keys work
     for key in keys:
-        httpx_client = AsyncClient(
-            transport=ASGITransport(app=app),
-            base_url="http://test",
-        )
         key_client = AsyncPlatformClient(
-            base_url="http://test",
+            base_url=E2E_API_URL,
             api_key=key["key"],
-            client=httpx_client,
         )
 
         try:
@@ -492,14 +465,9 @@ async def test_revoking_one_key_doesnt_affect_others(auth_test_setup):
     await client.auth.revoke_api_key(key1["id"])
 
     # Key 2 should still work
-    httpx_client = AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-    )
     key2_client = AsyncPlatformClient(
-        base_url="http://test",
+        base_url=E2E_API_URL,
         api_key=key2["key"],
-        client=httpx_client,
     )
 
     try:
@@ -518,288 +486,261 @@ async def test_revoking_one_key_doesnt_affect_others(auth_test_setup):
 @pytest.mark.asyncio
 async def test_register_local_credential(auth_test_setup):
     """Test registering a local username/password credential."""
-    client = auth_test_setup["client"]
     tenant_id = auth_test_setup["tenant_id"]
-    principal_id = auth_test_setup["principal_id"]
+    # Use a unique principal to avoid conflicts with previous test runs
+    principal_id = uuid4()
 
     # Register via direct HTTP call (not SDK method yet)
-    httpx_client = AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-    )
+    async with httpx.AsyncClient(base_url=E2E_API_URL) as httpx_client:
+        response = await httpx_client.post(
+            "/auth/register",
+            json={
+                "tenant_id": str(tenant_id),
+                "principal_id": str(principal_id),
+                "username": f"testuser_{uuid4().hex[:8]}",
+                "password": "testpass123",
+            },
+        )
 
-    response = await httpx_client.post(
-        "/auth/register",
-        json={
-            "tenant_id": str(tenant_id),
-            "principal_id": str(principal_id),
-            "username": "testuser",
-            "password": "testpass123",
-        },
-    )
-
-    assert response.status_code == 201
-    data = response.json()
-    assert data["username"] == "testuser"
-    assert str(data["principal_id"]) == str(principal_id)
-    assert data["message"] == "Registration successful"
-
-    await httpx_client.aclose()
+        assert response.status_code == 201, f"Registration failed: {response.text}"
+        data = response.json()
+        assert "username" in data
+        assert str(data["principal_id"]) == str(principal_id)
+        assert data["message"] == "Registration successful"
 
 
 @pytest.mark.asyncio
 async def test_login_with_username_password(auth_test_setup):
     """Test logging in with username and password."""
-    client = auth_test_setup["client"]
     tenant_id = auth_test_setup["tenant_id"]
-    principal_id = auth_test_setup["principal_id"]
+    # Use a unique principal to avoid conflicts with previous test runs
+    principal_id = uuid4()
 
-    httpx_client = AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-    )
+    username = f"loginuser_{uuid4().hex[:8]}"
 
-    # First register a credential
-    await httpx_client.post(
-        "/auth/register",
-        json={
-            "tenant_id": str(tenant_id),
-            "principal_id": str(principal_id),
-            "username": "loginuser",
-            "password": "loginpass123",
-        },
-    )
+    async with httpx.AsyncClient(base_url=E2E_API_URL) as httpx_client:
+        # First register a credential
+        reg_response = await httpx_client.post(
+            "/auth/register",
+            json={
+                "tenant_id": str(tenant_id),
+                "principal_id": str(principal_id),
+                "username": username,
+                "password": "loginpass123",
+            },
+        )
+        assert reg_response.status_code == 201, (
+            f"Registration failed: {reg_response.text}"
+        )
 
-    # Now login
-    response = await httpx_client.post(
-        "/auth/login",
-        json={
-            "tenant_id": str(tenant_id),
-            "username": "loginuser",
-            "password": "loginpass123",
-        },
-    )
+        # Now login
+        response = await httpx_client.post(
+            "/auth/login",
+            json={
+                "tenant_id": str(tenant_id),
+                "username": username,
+                "password": "loginpass123",
+            },
+        )
 
-    assert response.status_code == 200
-    data = response.json()
-    assert str(data["principal_id"]) == str(principal_id)
-    assert str(data["tenant_id"]) == str(tenant_id)
-    assert data["message"] == "Login successful"
-    assert "expires_at" in data
+        assert response.status_code == 200
+        data = response.json()
+        assert str(data["principal_id"]) == str(principal_id)
+        assert str(data["tenant_id"]) == str(tenant_id)
+        assert data["message"] == "Login successful"
+        assert "expires_at" in data
 
-    # Check that session cookie was set
-    assert "optaic_session" in response.cookies
-
-    await httpx_client.aclose()
+        # Check that session cookie was set
+        assert "optaic_session" in response.cookies
 
 
 @pytest.mark.asyncio
 async def test_session_cookie_authentication(auth_test_setup):
     """Test that session cookie authenticates subsequent requests."""
-    client = auth_test_setup["client"]
     tenant_id = auth_test_setup["tenant_id"]
-    principal_id = auth_test_setup["principal_id"]
+    # Use a unique principal to avoid conflicts with previous test runs
+    principal_id = uuid4()
 
-    httpx_client = AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-    )
+    username = f"sessionuser_{uuid4().hex[:8]}"
 
-    # Register and login
-    await httpx_client.post(
-        "/auth/register",
-        json={
-            "tenant_id": str(tenant_id),
-            "principal_id": str(principal_id),
-            "username": "sessionuser",
-            "password": "sessionpass123",
-        },
-    )
+    async with httpx.AsyncClient(base_url=E2E_API_URL) as httpx_client:
+        # Register and login
+        reg_response = await httpx_client.post(
+            "/auth/register",
+            json={
+                "tenant_id": str(tenant_id),
+                "principal_id": str(principal_id),
+                "username": username,
+                "password": "sessionpass123",
+            },
+        )
+        assert reg_response.status_code == 201, (
+            f"Registration failed: {reg_response.text}"
+        )
 
-    login_response = await httpx_client.post(
-        "/auth/login",
-        json={
-            "tenant_id": str(tenant_id),
-            "username": "sessionuser",
-            "password": "sessionpass123",
-        },
-    )
+        login_response = await httpx_client.post(
+            "/auth/login",
+            json={
+                "tenant_id": str(tenant_id),
+                "username": username,
+                "password": "sessionpass123",
+            },
+        )
 
-    session_cookie = login_response.cookies.get("optaic_session")
-    assert session_cookie is not None
-
-    # Create new client with session cookie set
-    session_httpx_client = AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-        cookies={"optaic_session": session_cookie},
-    )
+        session_cookie = login_response.cookies.get("optaic_session")
+        assert session_cookie is not None
 
     # Use session cookie to get session info
-    response = await session_httpx_client.get("/auth/session")
+    async with httpx.AsyncClient(
+        base_url=E2E_API_URL,
+        cookies={"optaic_session": session_cookie},
+    ) as session_client:
+        response = await session_client.get("/auth/session")
 
-    assert response.status_code == 200
-    data = response.json()
-    assert str(data["principal_id"]) == str(principal_id)
-    assert str(data["tenant_id"]) == str(tenant_id)
-    assert data["auth_method"] == "session"
-
-    await httpx_client.aclose()
-    await session_httpx_client.aclose()
+        assert response.status_code == 200
+        data = response.json()
+        assert str(data["principal_id"]) == str(principal_id)
+        assert str(data["tenant_id"]) == str(tenant_id)
+        assert data["auth_method"] == "session"
 
 
 @pytest.mark.asyncio
 async def test_session_cookie_can_access_protected_endpoints(auth_test_setup):
     """Test that session cookie can access protected API endpoints."""
-    client = auth_test_setup["client"]
     tenant_id = auth_test_setup["tenant_id"]
-    principal_id = auth_test_setup["principal_id"]
+    # Use a unique principal to avoid conflicts with previous test runs
+    principal_id = uuid4()
 
-    httpx_client = AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-    )
+    username = f"protecteduser_{uuid4().hex[:8]}"
 
-    # Register and login
-    await httpx_client.post(
-        "/auth/register",
-        json={
-            "tenant_id": str(tenant_id),
-            "principal_id": str(principal_id),
-            "username": "protecteduser",
-            "password": "protectedpass123",
-        },
-    )
+    async with httpx.AsyncClient(base_url=E2E_API_URL) as httpx_client:
+        # Register and login
+        reg_response = await httpx_client.post(
+            "/auth/register",
+            json={
+                "tenant_id": str(tenant_id),
+                "principal_id": str(principal_id),
+                "username": username,
+                "password": "protectedpass123",
+            },
+        )
+        assert reg_response.status_code == 201, (
+            f"Registration failed: {reg_response.text}"
+        )
 
-    login_response = await httpx_client.post(
-        "/auth/login",
-        json={
-            "tenant_id": str(tenant_id),
-            "username": "protecteduser",
-            "password": "protectedpass123",
-        },
-    )
+        login_response = await httpx_client.post(
+            "/auth/login",
+            json={
+                "tenant_id": str(tenant_id),
+                "username": username,
+                "password": "protectedpass123",
+            },
+        )
 
-    session_cookie = login_response.cookies.get("optaic_session")
-
-    # Create new client with session cookie set
-    session_httpx_client = AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-        cookies={"optaic_session": session_cookie},
-    )
+        session_cookie = login_response.cookies.get("optaic_session")
 
     # Use session to access /auth/me (protected endpoint)
-    response = await session_httpx_client.get("/auth/me")
+    async with httpx.AsyncClient(
+        base_url=E2E_API_URL,
+        cookies={"optaic_session": session_cookie},
+    ) as session_client:
+        response = await session_client.get("/auth/me")
 
-    assert response.status_code == 200
-    data = response.json()
-    assert str(data["principal_id"]) == str(principal_id)
-    assert data["auth_method"] == "session"
-
-    await httpx_client.aclose()
-    await session_httpx_client.aclose()
+        assert response.status_code == 200
+        data = response.json()
+        assert str(data["principal_id"]) == str(principal_id)
+        assert data["auth_method"] == "session"
 
 
 @pytest.mark.asyncio
 async def test_logout_clears_session(auth_test_setup):
     """Test that logout clears the session."""
-    client = auth_test_setup["client"]
     tenant_id = auth_test_setup["tenant_id"]
-    principal_id = auth_test_setup["principal_id"]
+    # Use a unique principal to avoid conflicts with previous test runs
+    principal_id = uuid4()
 
-    httpx_client = AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-    )
+    username = f"logoutuser_{uuid4().hex[:8]}"
 
-    # Register and login
-    await httpx_client.post(
-        "/auth/register",
-        json={
-            "tenant_id": str(tenant_id),
-            "principal_id": str(principal_id),
-            "username": "logoutuser",
-            "password": "logoutpass123",
-        },
-    )
+    async with httpx.AsyncClient(base_url=E2E_API_URL) as httpx_client:
+        # Register and login
+        reg_response = await httpx_client.post(
+            "/auth/register",
+            json={
+                "tenant_id": str(tenant_id),
+                "principal_id": str(principal_id),
+                "username": username,
+                "password": "logoutpass123",
+            },
+        )
+        assert reg_response.status_code == 201, (
+            f"Registration failed: {reg_response.text}"
+        )
 
-    login_response = await httpx_client.post(
-        "/auth/login",
-        json={
-            "tenant_id": str(tenant_id),
-            "username": "logoutuser",
-            "password": "logoutpass123",
-        },
-    )
+        login_response = await httpx_client.post(
+            "/auth/login",
+            json={
+                "tenant_id": str(tenant_id),
+                "username": username,
+                "password": "logoutpass123",
+            },
+        )
 
-    session_cookie = login_response.cookies.get("optaic_session")
-
-    # Create client with session cookie for logout
-    session_httpx_client = AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-        cookies={"optaic_session": session_cookie},
-    )
+        session_cookie = login_response.cookies.get("optaic_session")
 
     # Logout
-    logout_response = await session_httpx_client.post("/auth/logout")
+    async with httpx.AsyncClient(
+        base_url=E2E_API_URL,
+        cookies={"optaic_session": session_cookie},
+    ) as session_client:
+        logout_response = await session_client.post("/auth/logout")
 
-    assert logout_response.status_code == 200
-    assert logout_response.json()["message"] == "Logged out successfully"
+        assert logout_response.status_code == 200
+        assert logout_response.json()["message"] == "Logged out successfully"
 
     # Try to use the old session - should fail
-    # Create a new client with the same (now invalid) cookie
-    invalid_session_client = AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
+    async with httpx.AsyncClient(
+        base_url=E2E_API_URL,
         cookies={"optaic_session": session_cookie},
-    )
-    response = await invalid_session_client.get("/auth/session")
-
-    assert response.status_code == 401
-
-    await httpx_client.aclose()
-    await session_httpx_client.aclose()
-    await invalid_session_client.aclose()
+    ) as invalid_client:
+        response = await invalid_client.get("/auth/session")
+        assert response.status_code == 401
 
 
 @pytest.mark.asyncio
 async def test_invalid_credentials_fail_login(auth_test_setup):
     """Test that invalid credentials fail login."""
-    client = auth_test_setup["client"]
     tenant_id = auth_test_setup["tenant_id"]
-    principal_id = auth_test_setup["principal_id"]
+    # Use a unique principal to avoid conflicts with previous test runs
+    principal_id = uuid4()
 
-    httpx_client = AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-    )
+    username = f"invaliduser_{uuid4().hex[:8]}"
 
-    # Register a credential
-    await httpx_client.post(
-        "/auth/register",
-        json={
-            "tenant_id": str(tenant_id),
-            "principal_id": str(principal_id),
-            "username": "invaliduser",
-            "password": "correctpass123",
-        },
-    )
+    async with httpx.AsyncClient(base_url=E2E_API_URL) as httpx_client:
+        # Register a credential
+        reg_response = await httpx_client.post(
+            "/auth/register",
+            json={
+                "tenant_id": str(tenant_id),
+                "principal_id": str(principal_id),
+                "username": username,
+                "password": "correctpass123",
+            },
+        )
+        assert reg_response.status_code == 201, (
+            f"Registration failed: {reg_response.text}"
+        )
 
-    # Try to login with wrong password
-    response = await httpx_client.post(
-        "/auth/login",
-        json={
-            "tenant_id": str(tenant_id),
-            "username": "invaliduser",
-            "password": "wrongpassword",
-        },
-    )
+        # Try to login with wrong password
+        response = await httpx_client.post(
+            "/auth/login",
+            json={
+                "tenant_id": str(tenant_id),
+                "username": username,
+                "password": "wrongpassword",
+            },
+        )
 
-    assert response.status_code == 401
-
-    await httpx_client.aclose()
+        assert response.status_code == 401
 
 
 @pytest.mark.asyncio
@@ -807,58 +748,51 @@ async def test_nonexistent_user_fails_login(auth_test_setup):
     """Test that nonexistent username fails login."""
     tenant_id = auth_test_setup["tenant_id"]
 
-    httpx_client = AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-    )
+    async with httpx.AsyncClient(base_url=E2E_API_URL) as httpx_client:
+        response = await httpx_client.post(
+            "/auth/login",
+            json={
+                "tenant_id": str(tenant_id),
+                "username": "nonexistentuser",
+                "password": "anypassword",
+            },
+        )
 
-    response = await httpx_client.post(
-        "/auth/login",
-        json={
-            "tenant_id": str(tenant_id),
-            "username": "nonexistentuser",
-            "password": "anypassword",
-        },
-    )
-
-    assert response.status_code == 401
-
-    await httpx_client.aclose()
+        assert response.status_code == 401
 
 
 @pytest.mark.asyncio
 async def test_duplicate_username_registration_fails(auth_test_setup):
     """Test that registering the same username twice fails."""
     tenant_id = auth_test_setup["tenant_id"]
-    principal_id = auth_test_setup["principal_id"]
+    # Use a unique principal to avoid conflicts with previous test runs
+    principal_id = uuid4()
 
-    httpx_client = AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-    )
+    username = f"duplicateuser_{uuid4().hex[:8]}"
 
-    # First registration
-    response1 = await httpx_client.post(
-        "/auth/register",
-        json={
-            "tenant_id": str(tenant_id),
-            "principal_id": str(principal_id),
-            "username": "duplicateuser",
-            "password": "pass123456",
-        },
-    )
-    assert response1.status_code == 201
+    async with httpx.AsyncClient(base_url=E2E_API_URL) as httpx_client:
+        # First registration
+        response1 = await httpx_client.post(
+            "/auth/register",
+            json={
+                "tenant_id": str(tenant_id),
+                "principal_id": str(principal_id),
+                "username": username,
+                "password": "pass123456",
+            },
+        )
+        assert response1.status_code == 201, (
+            f"First registration failed: {response1.text}"
+        )
 
-    # Second registration with same username should fail
-    response2 = await httpx_client.post(
-        "/auth/register",
-        json={
-            "tenant_id": str(tenant_id),
-            "principal_id": str(uuid4()),  # Different principal
-            "username": "duplicateuser",
-            "password": "pass654321",
-        },
-    )
-    assert response2.status_code == 400
-
-    await httpx_client.aclose()
+        # Second registration with same username should fail
+        response2 = await httpx_client.post(
+            "/auth/register",
+            json={
+                "tenant_id": str(tenant_id),
+                "principal_id": str(uuid4()),  # Different principal
+                "username": username,
+                "password": "pass654321",
+            },
+        )
+        assert response2.status_code == 400

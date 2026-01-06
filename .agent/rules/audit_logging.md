@@ -61,3 +61,38 @@ OptAIC requires a strictly auditable trail for all resource mutations and critic
 - `experiment.run_failed` - Experiment run failed
 - `expression.evaluated` - Expression evaluated
 - `macro.saved` - Experiment saved as macro
+
+## 6. Real-time Notification Delivery
+
+Activities are delivered in real-time via Centrifugo WebSocket. The outbox worker determines recipients.
+
+### Notification Recipients (Watchers)
+
+| Type | Recipients | Mechanism |
+|------|------------|-----------|
+| Implicit | Resource owner | `Resource.owner_principal_id` |
+| Implicit | Delegators | `RoleBinding` with `role_name` in `{owner, delegator}` |
+| Explicit | Subscribers | `Subscription` table (user opt-in) |
+
+### Critical Rules
+
+1. **Never notify the actor** - The person performing an action should NOT receive a notification about it
+2. **Respect user preferences** - Check `NotificationPreference` before notifying
+3. **Walk the hierarchy** - Delegators are found by traversing `parent_id` chain
+
+### Notification Preferences
+
+Users configure filter modes via `PUT /notifications/preferences`:
+
+- `all` - All activity types
+- `mutations` (default) - Only `resource.created/updated/deleted`, `transfer.*`, `promotion.*`
+- `custom` - User-defined fnmatch patterns (e.g., `["resource.*", "chat.*"]`)
+
+### Anti-Patterns
+
+| Anti-Pattern | Correct Approach |
+|--------------|------------------|
+| Notify actor about own action | `watchers.discard(actor_principal_id)` |
+| Hardcode notification targets | Build watchers dynamically from owner/delegators/subscribers |
+| Skip preference filtering | Always call `_filter_watchers_by_preference()` |
+| Notify without role check | Use `_resource_delegators()` to traverse hierarchy |

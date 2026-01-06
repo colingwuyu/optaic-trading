@@ -249,6 +249,50 @@ client.set_tenant_id(tenant_id)
 - `apps/api/deps.py` - Multi-auth dependency flow
 - `libs/sdk_py/client.py` - AuthClient for SDK
 
+## Real-time Notifications
+
+Activities are delivered in real-time via Centrifugo WebSocket. The outbox worker determines recipients.
+
+### Notification Types
+
+| Type | Recipients | Automatic? |
+|------|------------|------------|
+| **Implicit** | Resource owner + Delegators | Yes |
+| **Explicit** | Subscribers | User opts in |
+
+### SDK Usage
+
+```python
+# Subscribe to a resource (explicit)
+await client.subscriptions.create(resource_id=folder_id, scope="descendants")
+
+# Configure notification preferences
+await client.notifications.update_preferences(
+    filter_mode="mutations",  # "all", "mutations", or "custom"
+    custom_actions=["resource.*"],  # for custom mode
+    muted=False,
+)
+
+# List/mark notifications
+notifications = await client.notifications.list(unread_only=True)
+await client.notifications.mark_all_read()
+```
+
+### Critical Anti-Patterns
+
+| Anti-Pattern | Why It's Wrong | Correct Approach |
+|--------------|----------------|------------------|
+| Notify actor about own action | Noisy, redundant | `watchers.discard(actor_id)` |
+| Hardcode notification targets | Inflexible | Build watchers dynamically |
+| Skip preference filtering | Users can't control noise | Always filter by preferences |
+
+### Key Files
+
+- `apps/worker/outbox.py` - Outbox consumer, notification delivery
+- `libs/db/models/notification.py` - Notification, NotificationPreference models
+- `apps/api/routers/notifications.py` - Notification API endpoints
+- `libs/sdk_py/notifications.py` - SDK NotificationsClient
+
 ## Tech Stack
 
 - Python 3.11+, FastAPI, async SQLAlchemy, Alembic
