@@ -36,7 +36,7 @@ export const HomePage = () => {
     if (!api || !rootResourceId) return;
     setLoadingTree(true);
     try {
-      const treeData = await api.getTree(rootResourceId, 3);
+      const treeData = await api.resources.getTree(rootResourceId, 3);
       setTree(treeData);
     } finally {
       setLoadingTree(false);
@@ -52,7 +52,7 @@ export const HomePage = () => {
   useEffect(() => {
     if (!api || !principalId) return;
     const loadInbox = async () => {
-      const inbox = await api.listActivities({ limit: 50 });
+      const inbox = await api.activities.list({ limit: 50 });
       const targeted = inbox.items.filter((event) =>
         event.targets?.user_inbox?.includes(principalId),
       );
@@ -64,7 +64,7 @@ export const HomePage = () => {
   useEffect(() => {
     if (!api || !resourceId) return;
     const loadResourceActivity = async () => {
-      const resourceFeed = await api.listActivities({
+      const resourceFeed = await api.activities.list({
         resourceId,
         limit: 50,
       });
@@ -86,7 +86,7 @@ export const HomePage = () => {
           useSessionStore.getState().rootResourceId;
 
         if (activityState.lastInboxSeen) {
-          const inbox = await api.listActivities({
+          const inbox = await api.activities.list({
             after: activityState.lastInboxSeen,
             limit: 200,
           });
@@ -101,7 +101,7 @@ export const HomePage = () => {
         if (selectedResourceId) {
           const after = activityState.lastResourceSeen[selectedResourceId];
           if (after) {
-            const resourceFeed = await api.listActivities({
+            const resourceFeed = await api.activities.list({
               resourceId: selectedResourceId,
               after,
               limit: 200,
@@ -116,7 +116,7 @@ export const HomePage = () => {
         if (activeChannelId) {
           const after = chatState.lastMessageSeen[activeChannelId];
           if (after) {
-            const messages = await api.getMessages(activeChannelId, {
+            const messages = await api.chat.listMessages(activeChannelId, {
               after,
               limit: 200,
             });

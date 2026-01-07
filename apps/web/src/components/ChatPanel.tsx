@@ -50,14 +50,14 @@ export const ChatPanel = ({ resourceId }: { resourceId?: string | null }) => {
 
   const loadChannels = async () => {
     if (!api || !resourceId) return;
-    const page = await api.listChannels(resourceId);
+    const page = await api.chat.listChannels(resourceId);
     const next = page.items.map((item) => ({ id: item.id, name: item.name }));
     if (next.length) {
       setChannels(next);
       return;
     }
     try {
-      await api.getMessages(resourceId, { limit: 1 });
+      await api.chat.listMessages(resourceId, { limit: 1 });
       setChannels([{ id: resourceId, name: `Channel ${resourceId.slice(0, 6)}` }]);
     } catch {
       setChannels([]);
@@ -66,7 +66,7 @@ export const ChatPanel = ({ resourceId }: { resourceId?: string | null }) => {
 
   const loadMessages = async (channelId: string) => {
     if (!api) return;
-    const page = await api.getMessages(channelId, { limit: 50 });
+    const page = await api.chat.listMessages(channelId, { limit: 50 });
     setMessages(channelId, page.items);
   };
 
@@ -98,9 +98,9 @@ export const ChatPanel = ({ resourceId }: { resourceId?: string | null }) => {
     if (!body) return;
     setSending(true);
     try {
-      const message = await api.sendMessage(activeChannelId, { body });
+      const message = await api.chat.sendMessage(activeChannelId, { body });
       if (pendingAttachment) {
-        const initPayload = await api.uploadAttachmentInit({
+        const initPayload = await api.chat.uploadInit({
           channel_id: activeChannelId,
           filename: pendingAttachment.name,
           content_type: pendingAttachment.type || "application/octet-stream",
@@ -113,7 +113,7 @@ export const ChatPanel = ({ resourceId }: { resourceId?: string | null }) => {
           headers: initPayload.headers || {},
         });
 
-        await api.finalizeAttachment({
+        await api.chat.finalizeAttachment({
           message_id: message.id,
           object_key: initPayload.object_key,
         });

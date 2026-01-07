@@ -123,7 +123,12 @@ class AsyncPlatformClient:
             from .datasets import DatasetsClient
             self._datasets = DatasetsClient(self)
         return self._datasets
+        return self._datasets
 ```
+
+> [!WARNING]
+> **Anti-Pattern**: NEVER initialize these clients in `__init__`. Doing so causes circular import errors because domain clients import the `AsyncPlatformClient` type. Always use the lazy property pattern shown above.
+
 
 ### Dataclass Models
 SDK models are simple dataclasses with `from_dict` factory:

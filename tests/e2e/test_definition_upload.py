@@ -186,7 +186,6 @@ async def upload_test_setup(sdk_client: AsyncPlatformClient):
     BOOTSTRAP_ADMIN_ID = "00000000-0000-0000-0000-000000000003"
     BOOTSTRAP_SPACE_ID = "00000000-0000-0000-0000-000000000002"
 
-
     sdk_client.set_principal_id(BOOTSTRAP_ADMIN_ID)
     sdk_client.set_tenant_id(BOOTSTRAP_TENANT_ID)
 

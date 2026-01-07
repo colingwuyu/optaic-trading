@@ -24,15 +24,15 @@ export const ApprovalsPanel = ({ resourceId }: { resourceId?: string | null }) =
     if (!api || !resourceId || !tenantId || !principalId) return;
     setLoading(true);
     try {
-      const page = await api.listResources(resourceId, { limit: 50 });
+      const page = await api.resources.listChildren(resourceId, { limit: 50 });
       const mergeIds = page.items.filter((item) => item.type === "MergeRequest");
       const promoIds = page.items.filter((item) => item.type === "PromotionRequest");
 
       const mergeRequests = await Promise.all(
-        mergeIds.map((item) => api.getMergeRequest(item.id)),
+        mergeIds.map((item) => api.mergeRequests.get(item.id)),
       );
       const promotions = await Promise.all(
-        promoIds.map((item) => api.getPromotion(item.id)),
+        promoIds.map((item) => api.promotions.get(item.id)),
       );
 
       const next: ApprovalItem[] = [
@@ -71,9 +71,9 @@ export const ApprovalsPanel = ({ resourceId }: { resourceId?: string | null }) =
   const handleApproval = async (item: ApprovalItem, decision: "approve" | "reject") => {
     if (!api || !tenantId || !principalId) return;
     if (item.kind === "merge") {
-      await api.approveMergeRequest(item.id, { decision });
+      await api.mergeRequests.approve(item.id, { decision });
     } else {
-      await api.approvePromotion(item.id, { decision });
+      await api.promotions.approve(item.id, { decision });
     }
     await fetchApprovals();
   };
@@ -81,9 +81,9 @@ export const ApprovalsPanel = ({ resourceId }: { resourceId?: string | null }) =
   const handleExecute = async (item: ApprovalItem) => {
     if (!api) return;
     if (item.kind === "merge") {
-      await api.merge(item.id);
+      await api.mergeRequests.merge(item.id);
     } else {
-      await api.executePromotion(item.id);
+      await api.promotions.execute(item.id);
     }
     await fetchApprovals();
   };

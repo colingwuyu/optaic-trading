@@ -24,6 +24,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Adding Docker dependencies to production code (use native Windows embedded deployment model)
 - Manual database migrations (auto-run on `optaic server`)
 
+### Anti-Patterns to Avoid
+
+- **Raw Fetch Usage**: Do NOT use `fetch()` directly in UI components. Always use the `ApiClient` methods (e.g., `api.resources.get()`) to ensure consistent auth, error handling, and typing.
+- **Eager SDK Initialization**: Do NOT initialize sub-clients in the `ApiClient` constructor. Use lazy getters to avoid cyclic imports and reduce startup time.
+- **Raw File Uploads**: Do NOT manually construct upload requests unless absolutely necessary. Use SDK helper methods. If a presigned URL is required for MinIO/Storage, encapsulate the upload logic in a utility function or SDK method.
+
 ## Unit Test Requirements Policy
 
 ### All Tasks Must Pass Unit Tests

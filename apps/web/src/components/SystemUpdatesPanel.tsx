@@ -1,61 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 
+import type {
+  RuntimeInfo,
+  UpgradePlan,
+  UpgradeStart,
+} from "@sdk";
 import { Button } from "@/components/ui/button";
-import { apiBaseUrl } from "@/services/api";
-import { useSessionStore } from "@/state/session";
-
-type PackageUpdate = {
-  package: string;
-  current_version: string;
-  latest_version: string;
-  has_update: boolean;
-  source: string;
-  index_url?: string | null;
-  checked_at: string;
-  message?: string | null;
-};
-
-type InfraAction = {
-  tool: string;
-  version: string;
-  asset_url: string;
-  asset_sha256: string;
-};
-
-type UpgradePlan = {
-  package_update?: PackageUpdate | null;
-  infra_plan: InfraAction[];
-  db_migration_needed: boolean;
-  warnings: string[];
-};
-
-type UpgradeStart = {
-  status: string;
-  job_path?: string | null;
-  message?: string | null;
-  will_restart: boolean;
-};
-
-type RuntimeInfo = {
-  version: string;
-  channel?: string | null;
-  package_index_url?: string | null;
-  db_dialect?: string | null;
-  db_alembic_head?: string | null;
-  tools: Record<string, unknown>;
-  centrifugo_engine: string;
-  with_redis: boolean;
-  last_upgrade_at?: string | null;
-  upgrade_status?: {
-    status?: string | null;
-    started_at?: string | null;
-    finished_at?: string | null;
-    last_error?: string | null;
-  };
-};
+import { useApiClient } from "@/services/api";
 
 export const SystemUpdatesPanel = () => {
-  const { tenantId, principalId } = useSessionStore();
+  const api = useApiClient();
   const [runtime, setRuntime] = useState<RuntimeInfo | null>(null);
   const [plan, setPlan] = useState<UpgradePlan | null>(null);
   const [loading, setLoading] = useState(false);
@@ -65,28 +19,12 @@ export const SystemUpdatesPanel = () => {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
-  const fetchRuntime = async () => {
-    if (!tenantId || !principalId) {
-      throw new Error("Missing session headers.");
-    }
-    const resp = await fetch(`${apiBaseUrl}/system/runtime`, {
-      cache: "no-store",
-      headers: {
-        "X-Tenant-Id": tenantId,
-        "X-Principal-Id": principalId,
-      },
-    });
-    if (!resp.ok) {
-      throw new Error(`Runtime check failed (${resp.status})`);
-    }
-    return (await resp.json()) as RuntimeInfo;
-  };
-
   const loadRuntime = async () => {
+    if (!api) return;
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchRuntime();
+      const data = await api.system.getRuntime();
       setRuntime(data);
     } catch (err) {
       setError((err as Error).message);
@@ -96,26 +34,15 @@ export const SystemUpdatesPanel = () => {
   };
 
   const checkUpdates = async (runtimeInfo?: RuntimeInfo) => {
+    if (!api) return null;
     setChecking(true);
     setError(null);
     try {
-      const effectiveRuntime = runtimeInfo ?? runtime ?? (await fetchRuntime());
-      const resp = await fetch(`${apiBaseUrl}/system/upgrade/plan`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Tenant-Id": tenantId ?? "",
-          "X-Principal-Id": principalId ?? "",
-        },
-        body: JSON.stringify({
-          with_redis: effectiveRuntime.with_redis,
-          check_package_updates: true,
-        }),
+      const effectiveRuntime = runtimeInfo ?? runtime ?? (await api.system.getRuntime());
+      const data = await api.system.getUpgradePlan({
+        with_redis: effectiveRuntime.with_redis,
+        check_package_updates: true,
       });
-      if (!resp.ok) {
-        throw new Error(`Upgrade plan failed (${resp.status})`);
-      }
-      const data: UpgradePlan = await resp.json();
       setPlan(data);
       setRuntime(effectiveRuntime);
       return data;
@@ -128,23 +55,15 @@ export const SystemUpdatesPanel = () => {
   };
 
   const pollRuntime = async () => {
+    if (!api) return;
     const pollUntil = Date.now() + 180000;
     while (Date.now() < pollUntil) {
       try {
-        const resp = await fetch(`${apiBaseUrl}/system/runtime`, {
-          cache: "no-store",
-          headers: {
-            "X-Tenant-Id": tenantId ?? "",
-            "X-Principal-Id": principalId ?? "",
-          },
-        });
-        if (resp.ok) {
-          setStatus("Server restarted.");
-          const data: RuntimeInfo = await resp.json();
-          setRuntime(data);
-          await checkUpdates(data);
-          return;
-        }
+        const data = await api.system.getRuntime();
+        setStatus("Server restarted.");
+        setRuntime(data);
+        await checkUpdates(data);
+        return;
       } catch {
         // ignore while restarting
       }
@@ -154,6 +73,7 @@ export const SystemUpdatesPanel = () => {
   };
 
   const startUpgrade = async () => {
+    if (!api) return;
     let planData = plan;
     if (!planData) {
       planData = await checkUpdates();
@@ -165,7 +85,7 @@ export const SystemUpdatesPanel = () => {
     let effectiveRuntime = runtime;
     if (!effectiveRuntime) {
       try {
-        effectiveRuntime = await fetchRuntime();
+        effectiveRuntime = await api.system.getRuntime();
         setRuntime(effectiveRuntime);
       } catch {
         effectiveRuntime = null;
@@ -192,24 +112,11 @@ export const SystemUpdatesPanel = () => {
     setStatus("Upgrading... server will restart.");
     const applyPackageUpdate = Boolean(planData.package_update?.has_update);
     try {
-      const resp = await fetch(`${apiBaseUrl}/system/upgrade/start`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Tenant-Id": tenantId ?? "",
-          "X-Principal-Id": principalId ?? "",
-        },
-        body: JSON.stringify({
-          with_redis: effectiveRuntime?.with_redis ?? false,
-          apply_package_update: applyPackageUpdate,
-          restart: true,
-        }),
+      const result: UpgradeStart = await api.system.startUpgrade({
+        with_redis: effectiveRuntime?.with_redis ?? false,
+        apply_package_update: applyPackageUpdate,
+        restart: true,
       });
-      if (!resp.ok) {
-        const body = await resp.text();
-        throw new Error(body || `Upgrade start failed (${resp.status})`);
-      }
-      const result: UpgradeStart = await resp.json();
       if (result.message) {
         setStatus(result.message);
       }
@@ -226,30 +133,14 @@ export const SystemUpdatesPanel = () => {
   };
 
   const updateChannel = async (nextChannel: string) => {
-    if (!tenantId || !principalId) {
-      setError("Missing session headers.");
+    if (!api) {
+      setError("API client not available.");
       return;
     }
     setSavingChannel(true);
     setError(null);
     try {
-      const resp = await fetch(`${apiBaseUrl}/system/channel`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Tenant-Id": tenantId,
-          "X-Principal-Id": principalId,
-        },
-        body: JSON.stringify({ channel: nextChannel }),
-      });
-      if (!resp.ok) {
-        const body = await resp.text();
-        throw new Error(body || `Channel update failed (${resp.status})`);
-      }
-      const payload = (await resp.json()) as {
-        channel: string;
-        package_index_url?: string | null;
-      };
+      const payload = await api.system.updateChannel(nextChannel);
       setRuntime((prev) =>
         prev
           ? {
@@ -275,10 +166,10 @@ export const SystemUpdatesPanel = () => {
   };
 
   useEffect(() => {
-    if (tenantId && principalId) {
+    if (api) {
       void loadRuntime();
     }
-  }, [tenantId, principalId]);
+  }, [api]);
 
   const {
     centrifugoVersion,
@@ -431,7 +322,7 @@ export const SystemUpdatesPanel = () => {
         <Button
           variant="secondary"
           size="sm"
-          onClick={checkUpdates}
+          onClick={() => void checkUpdates()}
           disabled={loading || checking || upgrading}
         >
           {checking ? "Checking..." : "Check for updates"}

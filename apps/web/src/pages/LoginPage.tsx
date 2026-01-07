@@ -42,9 +42,9 @@ export const LoginPage = () => {
         principalId: ownerId,
       });
 
-      const tenant = await client.createTenant({ name: "Demo Workspace" });
+      const tenant = await client.tenants.create("Demo Workspace");
 
-      await client.createPrincipal({
+      await client.principals.create({
         id: viewerId,
         display_name: "Viewer",
         email: "viewer@example.com",
@@ -54,25 +54,25 @@ export const LoginPage = () => {
         throw new Error("Tenant root resource not returned.");
       }
 
-      const space = await client.createResource({
+      const space = await client.resources.create({
         type: "Space",
         parent_id: tenant.root_resource_id,
         name: "Product Space",
       });
 
-      const subspace = await client.createResource({
+      const subspace = await client.resources.create({
         type: "Subspace",
         parent_id: space.id,
         name: "Planning Hub",
       });
 
-      const project = await client.createResource({
+      const project = await client.resources.create({
         type: "Project",
         parent_id: subspace.id,
         name: "Roadmap",
       });
 
-      await client.createChannel({
+      await client.chat.createChannel({
         parent_id: project.id,
         channel_kind: "group",
         name: "Project Chat",
